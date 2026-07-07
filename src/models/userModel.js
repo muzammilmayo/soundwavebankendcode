@@ -55,12 +55,13 @@ const UserModel = {
     };
   },
 
-  create: async ({ username, email, hashPassword, role_id }) => {
+  create: async ({ username, email, hashPassword, role_id, phone }) => {
     const user = await User.create({
       username,
       email,
       password: hashPassword,
       role_id,
+      phone,
     });
     return user.user_id;
   },
@@ -101,8 +102,8 @@ const UserModel = {
     await User.update({ role_id: roleId }, { where: { user_id: userId } });
   },
 
-  updateProfile: async (userId, { username, address, avatar }) => {
-    await User.update({ username, address, avatar }, { where: { user_id: userId } });
+  updateProfile: async (userId, { username, address, avatar, phone }) => {
+    await User.update({ username, address, avatar, phone }, { where: { user_id: userId } });
   },
 
   deleteById: async (userId) => {

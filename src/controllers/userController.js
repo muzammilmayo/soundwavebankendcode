@@ -59,3 +59,34 @@ exports.updateProfile = async (req, res) => {
     });
   }
 };
+exports.deleteAccount = async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Super Admins cannot self-delete
+    if (user.role_id === 1) {
+      return res.status(403).json({
+        success: false,
+        message: "Super Admin accounts cannot be self-deleted",
+      });
+    }
+
+    await UserModel.deleteById(userId);
+
+    return res.json({
+      success: true,
+      message: "Your account has been permanently deleted",
+    });
+  } catch (error) {
+    console.error("Error deleting account:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Database error deleting account",
+    });
+  }
+};

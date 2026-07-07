@@ -43,4 +43,7 @@ router.put("/change-password", verifyToken, changePassword);
 // Logout
 router.post("/logout", verifyToken, logout);
 
+// Delete Own Account
+router.delete("/account", verifyToken, userController.deleteAccount);
+
 module.exports = router;
