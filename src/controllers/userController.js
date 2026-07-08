@@ -17,6 +17,7 @@ exports.getProfile = async (req, res) => {
         address: user.address,
         avatar: user.avatar,
         created_at: user.created_at,
+        phone_number: user.phone,
       },
     });
   } catch (error) {

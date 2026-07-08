@@ -28,6 +28,9 @@ router.post("/forgot-password", forgotPassword);
 
 // Reset Password
 router.put("/reset-password/:token", resetPassword);
+router.put("/reset-password", resetPassword); // fallback route without token param
+router.post("/reset-password/:token", resetPassword);
+router.post("/reset-password", resetPassword); // fallback POST route
 
 // =========================
 // Protected Routes

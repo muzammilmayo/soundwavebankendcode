@@ -34,4 +34,23 @@ const sendResetEmail = async (email, resetLink) => {
   });
 };
 
-module.exports = sendResetEmail;
+// New welcome email for newly created admin accounts
+const sendWelcomeEmail = async (email, username, password) => {
+  await transporter.sendMail({
+    from: process.env.SMTP_USER,
+    to: email,
+    subject: 'SoundWave - Your Account Details',
+    html: `
+      <h2>Welcome to SoundWave</h2>
+      <p>Hi ${username},</p>
+      <p>Your administrator account has been created. Below are your login credentials:</p>
+      <ul>
+        <li><strong>Email:</strong> ${email}</li>
+        <li><strong>Password:</strong> ${password}</li>
+      </ul>
+      <p>Please keep this information secure. You can log in at <a href="${process.env.CLIENT_URL}/login">${process.env.CLIENT_URL}/login</a>.</p>
+    `,
+  });
+};
+
+module.exports = { sendResetEmail, sendWelcomeEmail };

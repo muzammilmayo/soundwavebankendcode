@@ -17,6 +17,7 @@ const UserModel = {
   // Find all users with their roles
   findAll: async () => {
     const users = await User.findAll({
+      where: { status: { [Op.ne]: 'Inactive' } },
       include: [{ model: Role, attributes: ["role_name"] }],
     });
     return users.map((u) => {
