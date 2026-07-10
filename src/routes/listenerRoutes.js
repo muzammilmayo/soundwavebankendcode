@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const verifyToken = require("../middleware/authMiddleware");
-const checkPermission = require("../middleware/permission.Middleware");
+const checkPermission = require("../middleware/permissionMiddleware");
 const listenerController = require("../controllers/listenerController");
 
 // Listener Dashboard

@@ -1,0 +1,86 @@
+CREATE DATABASE spotify_clone;
+USE spotify_clone;
+CREATE TABLE users (
+user_id INT AUTO_INCREMENT PRIMARY KEY,
+username VARCHAR(100) NOT NULL,
+email VARCHAR(150) UNIQUE NOT NULL,
+password VARCHAR(255) NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE roles (
+    role_id INT AUTO_INCREMENT PRIMARY KEY,
+    role_name VARCHAR(50) UNIQUE NOT NULL
+);
+ALTER TABLE users
+ADD COLUMN role_id INT DEFAULT 5,
+ADD CONSTRAINT fk_role
+FOREIGN KEY (role_id) REFERENCES roles(role_id);
+INSERT INTO roles (role_name) VALUES
+('Super Admin'),
+('Admin'),
+('Artist'),
+('Moderator'),
+('Listener');
+
+CREATE TABLE permissions (
+    permission_id INT AUTO_INCREMENT PRIMARY KEY,
+    permission_name VARCHAR(100) UNIQUE NOT NULL
+);
+INSERT INTO permissions (permission_name) VALUES
+('manage_users'),
+('manage_songs'),
+('upload_song'),
+('edit_own_song'),
+('delete_song'),
+('moderate_content'),
+('play_song'),
+('create_playlist'),
+('manage_playlist');
+CREATE TABLE role_permissions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    role_id INT NOT NULL,
+    permission_id INT NOT NULL,
+    FOREIGN KEY (role_id) REFERENCES roles(role_id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES permissions(permission_id) ON DELETE CASCADE,
+
+    UNIQUE(role_id, permission_id)
+);
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT 1, permission_id FROM permissions;
+SELECT * FROM permissions;
+
+SELECT * FROM permissions;
+-- ADMIN
+INSERT INTO role_permissions (role_id, permission_id)
+VALUES
+(2,1),
+(2,2),
+(2,5),
+(2,6);
+-- ARTIST
+INSERT INTO role_permissions (role_id, permission_id)
+VALUES
+(3,3),
+(3,4);
+
+
+-- Moderator
+INSERT INTO role_permissions (role_id, permission_id)
+VALUES
+(4,6);
+  
+  -- LISTEN
+  
+  INSERT INTO role_permissions (role_id, permission_id)
+VALUES
+(5,7),
+(5,8),
+(5,9);
+SELECT * FROM role_permissions
+SELECT * FROM roles;
+
+
+
+USE spotify_clone;
+SELECT * FROM users;
+SELECT * FROM roles
