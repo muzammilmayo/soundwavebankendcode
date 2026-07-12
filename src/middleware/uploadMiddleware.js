@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     // Store uploads in a dedicated folder within the project root
-    const uploadPath = path.resolve(__dirname, '../../uploads');
+    const uploadPath = path.resolve(__dirname, '../uploads');
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {

@@ -1,4 +1,4 @@
-const { Role } = require('../models');
+const { User, Role } = require('../models');
 
 /**
  * Middleware factory to check if the user's role has a required permission.
@@ -11,24 +11,34 @@ function checkPermission(requiredPermission) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    // Find role and its permissions using the user's role_id
-    Role.findByPk(user.role_id)
-      .then(role => {
-        if (!role) {
+    // Fallback: lookup user in DB if role_id is not in JWT payload
+    const roleIdPromise = user.role_id 
+      ? Promise.resolve(user.role_id) 
+      : User.findByPk(user.id).then(u => u?.role_id);
+
+    roleIdPromise
+      .then(roleId => {
+        if (!roleId) {
           return res.status(403).json({ success: false, message: 'Forbidden: role not found' });
         }
         
-        // Admin or Super Admin bypass
-        if (role.role_name === 'Admin' || role.role_name === 'Super Admin') {
-          return next();
-        }
-
-        return role.getPermissions().then(perms => {
-          const has = perms.some(p => p.permission_name === requiredPermission);
-          if (!has) {
-            return res.status(403).json({ success: false, message: 'Forbidden: missing permission' });
+        return Role.findByPk(roleId).then(role => {
+          if (!role) {
+            return res.status(403).json({ success: false, message: 'Forbidden: role not found' });
           }
-          next();
+          
+          // Admin or Super Admin bypass
+          if (role.role_name === 'Admin' || role.role_name === 'Super Admin') {
+            return next();
+          }
+
+          return role.getPermissions().then(perms => {
+            const has = perms.some(p => p.permission_name === requiredPermission);
+            if (!has) {
+              return res.status(403).json({ success: false, message: 'Forbidden: missing permission' });
+            }
+            next();
+          });
         });
       })
       .catch(err => {

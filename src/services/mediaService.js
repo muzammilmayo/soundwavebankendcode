@@ -14,7 +14,7 @@ const fs = require('fs');
  */
 function getUploadsDir() {
   // Resolve relative to project root (backend directory)
-  return path.resolve(__dirname, '../../uploads');
+  return path.resolve(__dirname, '../uploads');
 }
 
 /**

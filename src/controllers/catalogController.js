@@ -71,7 +71,11 @@ exports.createAlbum = async (req, res) => {
       if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
       artistProfileId = profile.artist_profile_id;
     }
-    const { title, description, cover_image, release_date } = req.body;
+    const { title, description, release_date } = req.body;
+    let cover_image = req.body.cover_image;
+    if (req.file) {
+      cover_image = `http://localhost:5000/uploads/${req.file.filename}`;
+    }
     const album = await Album.create({ 
       artist_profile_id: artistProfileId, 
       title, 
@@ -93,7 +97,8 @@ exports.updateAlbum = async (req, res) => {
     const album = await Album.findByPk(id);
     if (!album) return res.status(404).json({ success: false, message: "Album not found" });
 
-    const role = await Role.findByPk(req.user.role_id);
+    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const role = await Role.findByPk(roleId);
     if (role && role.role_name === 'Artist') {
       const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
       if (!profile || album.artist_profile_id !== profile.artist_profile_id) {
@@ -101,7 +106,18 @@ exports.updateAlbum = async (req, res) => {
       }
     }
 
-    await album.update(req.body);
+    const { title, description, release_date } = req.body;
+    let cover_image = req.body.cover_image;
+    if (req.file) {
+      cover_image = `http://localhost:5000/uploads/${req.file.filename}`;
+    }
+
+    const updateData = { title, description, release_date };
+    if (cover_image !== undefined) {
+      updateData.cover_image = cover_image;
+    }
+
+    await album.update(updateData);
     res.json({ success: true, album });
   } catch (err) {
     console.error(err);
@@ -115,7 +131,8 @@ exports.deleteAlbum = async (req, res) => {
     const album = await Album.findByPk(id);
     if (!album) return res.status(404).json({ success: false, message: "Album not found" });
 
-    const role = await Role.findByPk(req.user.role_id);
+    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const role = await Role.findByPk(roleId);
     if (role && role.role_name === 'Artist') {
       const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
       if (!profile || album.artist_profile_id !== profile.artist_profile_id) {
@@ -133,7 +150,8 @@ exports.deleteAlbum = async (req, res) => {
 
 exports.createSong = async (req, res) => {
   try {
-    const role = await Role.findByPk(req.user.role_id);
+    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const role = await Role.findByPk(roleId);
     let artistProfileId = req.body.artist_profile_id;
     if (role && role.role_name === 'Artist') {
       const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
@@ -155,7 +173,8 @@ exports.updateSong = async (req, res) => {
     const song = await Song.findByPk(id);
     if (!song) return res.status(404).json({ success: false, message: "Song not found" });
 
-    const role = await Role.findByPk(req.user.role_id);
+    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const role = await Role.findByPk(roleId);
     if (role && role.role_name === 'Artist') {
       const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
       if (!profile || song.artist_profile_id !== profile.artist_profile_id) {
@@ -177,7 +196,8 @@ exports.deleteSong = async (req, res) => {
     const song = await Song.findByPk(id);
     if (!song) return res.status(404).json({ success: false, message: "Song not found" });
 
-    const role = await Role.findByPk(req.user.role_id);
+    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const role = await Role.findByPk(roleId);
     if (role && role.role_name === 'Artist') {
       const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
       if (!profile || song.artist_profile_id !== profile.artist_profile_id) {

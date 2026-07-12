@@ -25,6 +25,17 @@ exports.upsertProfile = async (req, res) => {
       return res.status(400).json({ success: false, message: 'User does not exist' });
     }
     const profileData = { ...req.body, user_id: id };
+
+    // If files were uploaded via multipart/form-data, extract filenames and construct URLs
+    if (req.files) {
+      if (req.files.profile_image && req.files.profile_image[0]) {
+        profileData.profile_image = `http://localhost:5000/uploads/${req.files.profile_image[0].filename}`;
+      }
+      if (req.files.cover_image && req.files.cover_image[0]) {
+        profileData.cover_image = `http://localhost:5000/uploads/${req.files.cover_image[0].filename}`;
+      }
+    }
+
     const [profile, created] = await ArtistProfile.upsert(profileData, { returning: true });
     res.status(201).json({
       success: true,
