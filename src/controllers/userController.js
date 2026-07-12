@@ -17,6 +17,7 @@ exports.getProfile = async (req, res) => {
         address: user.address,
         avatar: user.avatar,
         created_at: user.created_at,
+        phone: user.phone,
         phone_number: user.phone,
       },
     });
@@ -31,10 +32,11 @@ exports.getProfile = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   const userId = req.user.id;
-  const { username, address, avatar } = req.body;
+  const { username, address, avatar, phone, phone_number } = req.body;
+  const phoneToSave = phone !== undefined ? phone : phone_number;
 
   try {
-    await UserModel.updateProfile(userId, { username, address, avatar });
+    await UserModel.updateProfile(userId, { username, address, avatar, phone: phoneToSave });
     
     // Fetch updated record
     const updated = await UserModel.findProfileById(userId);
@@ -50,6 +52,8 @@ exports.updateProfile = async (req, res) => {
         address: updated.address,
         avatar: updated.avatar,
         created_at: updated.created_at,
+        phone: updated.phone,
+        phone_number: updated.phone,
       },
     });
   } catch (error) {
