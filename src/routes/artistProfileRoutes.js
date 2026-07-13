@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-
+const verifyToken = require("../middleware/authMiddleware");
 const artistProfileController = require("../controllers/artistProfileController");
 const imageUpload = require("../middleware/imageUploadMiddleware");
 
@@ -10,15 +10,15 @@ const uploadFields = imageUpload.fields([
 ]);
 
 // Get artist profile by user_id
-router.get("/:id", artistProfileController.getProfile);
+router.get("/:id", verifyToken, artistProfileController.getProfile);
 
 // Create or Update artist profile by user_id
-router.post("/:id", uploadFields, artistProfileController.upsertProfile);
+router.post("/:id", verifyToken, uploadFields, artistProfileController.upsertProfile);
 
 // You can also use PUT for updates
-router.put("/:id", uploadFields, artistProfileController.upsertProfile);
+router.put("/:id", verifyToken, uploadFields, artistProfileController.upsertProfile);
 
 // Delete artist profile by user_id
-router.delete("/:id", artistProfileController.deleteProfile);
+router.delete("/:id", verifyToken, artistProfileController.deleteProfile);
 
 module.exports = router;

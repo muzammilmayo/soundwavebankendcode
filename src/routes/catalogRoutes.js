@@ -7,40 +7,65 @@ const checkPermission = require('../middleware/permissionMiddleware');
 const catalogController = require('../controllers/catalogController');
 
 // Middleware to allow Admins, Super Admins, and Artists to perform catalog operations
+const fs = require('fs');
+const path = require('path');
+const debugLog = (msg) => {
+  try {
+    fs.appendFileSync(path.join(__dirname, 'debug.txt'), msg + '\n');
+  } catch (err) {
+    console.error(err);
+  }
+};
+
 const checkArtistOrAdmin = (requiredPermission) => {
   return (req, res, next) => {
     const user = req.user;
-    if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    debugLog(`[checkArtistOrAdmin] Incoming request for /albums. User: ${JSON.stringify(user)}`);
+    if (!user) {
+      debugLog('[checkArtistOrAdmin] No user on request.');
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     
     const { User, Role } = require('../models');
     
-    // Fallback: lookup user in DB if role_id is not in JWT payload
-    const roleIdPromise = user.role_id 
-      ? Promise.resolve(user.role_id) 
-      : User.findByPk(user.id).then(u => u?.role_id);
+    // Always query database to get the latest role assignment
+    const roleIdPromise = User.findByPk(user.id).then(u => u?.role_id);
 
     roleIdPromise
       .then(roleId => {
-        if (!roleId) return res.status(403).json({ success: false, message: 'Forbidden: no role assigned' });
+        debugLog(`[checkArtistOrAdmin] resolved roleId: ${roleId}`);
+        if (!roleId) {
+          debugLog('[checkArtistOrAdmin] no roleId found.');
+          return res.status(403).json({ success: false, message: 'Forbidden: no role assigned' });
+        }
         
         return Role.findByPk(roleId).then(role => {
-          if (!role) return res.status(403).json({ success: false, message: 'Forbidden: role not found' });
+          debugLog(`[checkArtistOrAdmin] resolved role name: ${role?.role_name}`);
+          if (!role) {
+            debugLog('[checkArtistOrAdmin] Role not found in DB.');
+            return res.status(403).json({ success: false, message: 'Forbidden: role not found' });
+          }
           
-          // Admin, Super Admin, and Artist are allowed to modify the catalog (with ownership checks inside controllers)
           if (role.role_name === 'Admin' || role.role_name === 'Super Admin' || role.role_name === 'Artist') {
+            debugLog('[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.');
             return next();
           }
           
-          // Otherwise, verify required permission (e.g. for Moderator)
           return role.getPermissions().then(perms => {
+            const permNames = perms.map(p => p.permission_name);
+            debugLog(`[checkArtistOrAdmin] Role permissions: ${JSON.stringify(permNames)}. Required: ${requiredPermission}`);
             const has = perms.some(p => p.permission_name === requiredPermission);
-            if (!has) return res.status(403).json({ success: false, message: 'Forbidden: missing permission' });
+            if (!has) {
+              debugLog('[checkArtistOrAdmin] Missing required permission.');
+              return res.status(403).json({ success: false, message: 'Forbidden: missing permission' });
+            }
+            debugLog('[checkArtistOrAdmin] Permission matched. Allowing.');
             next();
           });
         });
       })
       .catch(err => {
-        console.error(err);
+        debugLog(`[checkArtistOrAdmin] ERROR: ${err.message}`);
         res.status(500).json({ success: false, message: 'Server error' });
       });
   };

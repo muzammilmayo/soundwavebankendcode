@@ -2,13 +2,23 @@
 
 const { ArtistProfile, Album, Song, Category, User, Role } = require("../models");
 const { Op } = require("sequelize");
+const mediaService = require("../services/mediaService");
 
 /** ---------------------------------------------------------------
  * PUBLIC ENDPOINTS – accessible to any logged‑in user (or even unauth).
  * --------------------------------------------------------------- */
 exports.browseArtists = async (req, res) => {
   try {
+    const { search } = req.query;
+    const whereClause = {};
+    if (search) {
+      whereClause[Op.or] = [
+        { stage_name: { [Op.like]: `%${search}%` } },
+        { bio: { [Op.like]: `%${search}%` } }
+      ];
+    }
     const artists = await ArtistProfile.findAll({
+      where: whereClause,
       attributes: { exclude: ["created_at", "updated_at"] },
       include: [{ model: User, attributes: ["username", "email"] }],
     });
@@ -21,8 +31,16 @@ exports.browseArtists = async (req, res) => {
 
 exports.browseAlbums = async (req, res) => {
   try {
+    const { search } = req.query;
+    const whereClause = { is_published: true };
+    if (search) {
+      whereClause[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { "$ArtistProfile.stage_name$": { [Op.like]: `%${search}%` } }
+      ];
+    }
     const albums = await Album.findAll({
-      where: { is_published: true },
+      where: whereClause,
       include: [{ model: ArtistProfile, attributes: ["stage_name"] }],
     });
     res.json({ success: true, albums });
@@ -34,8 +52,22 @@ exports.browseAlbums = async (req, res) => {
 
 exports.browseSongs = async (req, res) => {
   try {
+    const { search, category } = req.query;
+    const whereClause = { is_published: true };
+
+    if (category) {
+      whereClause.category_id = category;
+    }
+
+    if (search) {
+      whereClause[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { "$ArtistProfile.stage_name$": { [Op.like]: `%${search}%` } }
+      ];
+    }
+
     const songs = await Song.findAll({
-      where: { is_published: true },
+      where: whereClause,
       include: [
         { model: ArtistProfile, attributes: ["stage_name"] },
         { model: Album, attributes: ["title"] },
@@ -74,7 +106,7 @@ exports.createAlbum = async (req, res) => {
     const { title, description, release_date } = req.body;
     let cover_image = req.body.cover_image;
     if (req.file) {
-      cover_image = `http://localhost:5000/uploads/${req.file.filename}`;
+      cover_image = mediaService.getFileUrl(req.file.filename);
     }
     const album = await Album.create({ 
       artist_profile_id: artistProfileId, 
@@ -97,11 +129,11 @@ exports.updateAlbum = async (req, res) => {
     const album = await Album.findByPk(id);
     if (!album) return res.status(404).json({ success: false, message: "Album not found" });
 
-    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
     const role = await Role.findByPk(roleId);
     if (role && role.role_name === 'Artist') {
       const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile || album.artist_profile_id !== profile.artist_profile_id) {
+      if (!profile || album.artist_profile_id != profile.artist_profile_id) {
         return res.status(403).json({ success: false, message: "Forbidden: Cannot modify another artist's album" });
       }
     }
@@ -109,7 +141,7 @@ exports.updateAlbum = async (req, res) => {
     const { title, description, release_date } = req.body;
     let cover_image = req.body.cover_image;
     if (req.file) {
-      cover_image = `http://localhost:5000/uploads/${req.file.filename}`;
+      cover_image = mediaService.getFileUrl(req.file.filename);
     }
 
     const updateData = { title, description, release_date };
@@ -131,11 +163,11 @@ exports.deleteAlbum = async (req, res) => {
     const album = await Album.findByPk(id);
     if (!album) return res.status(404).json({ success: false, message: "Album not found" });
 
-    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
     const role = await Role.findByPk(roleId);
     if (role && role.role_name === 'Artist') {
       const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile || album.artist_profile_id !== profile.artist_profile_id) {
+      if (!profile || album.artist_profile_id != profile.artist_profile_id) {
         return res.status(403).json({ success: false, message: "Forbidden: Cannot delete another artist's album" });
       }
     }
@@ -150,7 +182,7 @@ exports.deleteAlbum = async (req, res) => {
 
 exports.createSong = async (req, res) => {
   try {
-    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
     const role = await Role.findByPk(roleId);
     let artistProfileId = req.body.artist_profile_id;
     if (role && role.role_name === 'Artist') {
@@ -173,11 +205,11 @@ exports.updateSong = async (req, res) => {
     const song = await Song.findByPk(id);
     if (!song) return res.status(404).json({ success: false, message: "Song not found" });
 
-    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
     const role = await Role.findByPk(roleId);
     if (role && role.role_name === 'Artist') {
       const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile || song.artist_profile_id !== profile.artist_profile_id) {
+      if (!profile || song.artist_profile_id != profile.artist_profile_id) {
         return res.status(403).json({ success: false, message: "Forbidden: Cannot modify another artist's song" });
       }
     }
@@ -196,11 +228,11 @@ exports.deleteSong = async (req, res) => {
     const song = await Song.findByPk(id);
     if (!song) return res.status(404).json({ success: false, message: "Song not found" });
 
-    const roleId = req.user.role_id || (await User.findByPk(req.user.id).then(u => u?.role_id));
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
     const role = await Role.findByPk(roleId);
     if (role && role.role_name === 'Artist') {
       const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile || song.artist_profile_id !== profile.artist_profile_id) {
+      if (!profile || song.artist_profile_id != profile.artist_profile_id) {
         return res.status(403).json({ success: false, message: "Forbidden: Cannot delete another artist's song" });
       }
     }

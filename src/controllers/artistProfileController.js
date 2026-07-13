@@ -1,4 +1,5 @@
 const { ArtistProfile, User } = require('../models');
+const mediaService = require('../services/mediaService');
 
 // Get artist profile by user ID (assuming user_id foreign key)
 exports.getProfile = async (req, res) => {
@@ -24,15 +25,16 @@ exports.upsertProfile = async (req, res) => {
     if (!existingUser) {
       return res.status(400).json({ success: false, message: 'User does not exist' });
     }
-    const profileData = { ...req.body, user_id: id };
+    const { stage_name, bio, profile_image, cover_image, facebook, instagram, youtube, spotify } = req.body;
+    const profileData = { stage_name, bio, profile_image, cover_image, facebook, instagram, youtube, spotify, user_id: id };
 
     // If files were uploaded via multipart/form-data, extract filenames and construct URLs
     if (req.files) {
       if (req.files.profile_image && req.files.profile_image[0]) {
-        profileData.profile_image = `http://localhost:5000/uploads/${req.files.profile_image[0].filename}`;
+        profileData.profile_image = mediaService.getFileUrl(req.files.profile_image[0].filename);
       }
       if (req.files.cover_image && req.files.cover_image[0]) {
-        profileData.cover_image = `http://localhost:5000/uploads/${req.files.cover_image[0].filename}`;
+        profileData.cover_image = mediaService.getFileUrl(req.files.cover_image[0].filename);
       }
     }
 

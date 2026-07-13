@@ -1,4 +1,5 @@
 const UserModel = require("../models/userModel");
+const { ArtistProfile } = require("../models");
 
 exports.getDashboard = (req, res) => {
   res.json({
@@ -86,4 +87,24 @@ exports.moderateContent = (req, res) => {
     success: true,
     message: "Content Moderated Successfully",
   });
+};
+
+exports.toggleArtistVerification = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const profile = await ArtistProfile.findOne({ where: { user_id: id } });
+    if (!profile) {
+      return res.status(404).json({ success: false, message: "Artist profile not found" });
+    }
+    const newVerificationStatus = !profile.is_verified;
+    await profile.update({ is_verified: newVerificationStatus });
+    res.json({
+      success: true,
+      message: `Artist verification status updated to ${newVerificationStatus ? 'Verified' : 'Unverified'} successfully`,
+      is_verified: newVerificationStatus
+    });
+  } catch (error) {
+    console.error("Error toggling artist verification status:", error);
+    res.status(500).json({ success: false, message: "Failed to toggle verification status" });
+  }
 };

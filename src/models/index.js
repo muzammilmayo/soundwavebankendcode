@@ -4,6 +4,8 @@ const User = require("./user");
 const Role = require("./role");
 const Permission = require("./permission");
 const RolePermission = require("./rolePermission");
+const SongLike = require("./SongLike");
+const ArtistFollower = require("./ArtistFollower");
 
 // Import catalog models by calling their initializer functions
 const Category = require("./Category")(sequelize, DataTypes);
@@ -46,6 +48,26 @@ Song.belongsTo(Album, { foreignKey: "album_id" });
 Category.hasMany(Song, { foreignKey: "category_id", onDelete: "SET NULL" });
 Song.belongsTo(Category, { foreignKey: "category_id" });
 
+// User & SongLikes
+User.belongsToMany(Song, { through: SongLike, foreignKey: "user_id", otherKey: "song_id", as: "likedSongs" });
+Song.belongsToMany(User, { through: SongLike, foreignKey: "song_id", otherKey: "user_id", as: "likedByUsers" });
+
+User.hasMany(SongLike, { foreignKey: "user_id" });
+SongLike.belongsTo(User, { foreignKey: "user_id" });
+
+Song.hasMany(SongLike, { foreignKey: "song_id" });
+SongLike.belongsTo(Song, { foreignKey: "song_id" });
+
+// User & ArtistFollowers
+User.belongsToMany(ArtistProfile, { through: ArtistFollower, foreignKey: "user_id", otherKey: "artist_profile_id", as: "followedArtists" });
+ArtistProfile.belongsToMany(User, { through: ArtistFollower, foreignKey: "artist_profile_id", otherKey: "user_id", as: "followers" });
+
+User.hasMany(ArtistFollower, { foreignKey: "user_id" });
+ArtistFollower.belongsTo(User, { foreignKey: "user_id" });
+
+ArtistProfile.hasMany(ArtistFollower, { foreignKey: "artist_profile_id" });
+ArtistFollower.belongsTo(ArtistProfile, { foreignKey: "artist_profile_id" });
+
 module.exports = {
   sequelize,
   User,
@@ -56,4 +78,6 @@ module.exports = {
   ArtistProfile,
   Album,
   Song,
+  SongLike,
+  ArtistFollower,
 };

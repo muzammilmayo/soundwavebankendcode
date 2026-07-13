@@ -1,0 +1,298 @@
+{
+  "playlists": [
+    {
+      "id": "playlist_1783927073487",
+      "name": "july",
+      "songs": [
+        {
+          "song_id": 6,
+          "artist_profile_id": 9,
+          "album_id": 8,
+          "category_id": 2,
+          "title": "\tTrending Punjabi Romantic Song | Viral Love Vibes",
+          "description": "\tA trending Punjabi romantic track with viral love vibes. Perfect for romantic moments and emotional storytelling.",
+          "duration": null,
+          "cover_image": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800",
+          "audio_file": "28490b87cd1ef8b91da9c2d2503848a9.mp3",
+          "release_date": null,
+          "is_published": true,
+          "created_at": "2026-07-10T12:26:15.000Z",
+          "updated_at": "2026-07-10T12:26:15.000Z",
+          "ArtistProfile": {
+            "stage_name": "Bilal Mayo"
+          },
+          "Album": {
+            "title": "Punjabi"
+          },
+          "Category": {
+            "name": "Rock"
+          }
+        }
+      ]
+    }
+  ],
+  "savedAlbums": [
+    {
+      "album_id": 11,
+      "artist_profile_id": 16,
+      "title": "Game On",
+      "description": "A high-energy Punjabi hip-hop rap track with powerful beats and motivational vibes. Perfect for workouts, parties, and anyone who loves energetic Punjabi music.",
+      "cover_image": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1200",
+      "release_date": "2026-07-10",
+      "is_published": true,
+      "created_at": "2026-07-10T19:27:38.000Z",
+      "updated_at": "2026-07-10T19:27:38.000Z",
+      "ArtistProfile": {
+        "stage_name": "Bilal Mayo"
+      }
+    }
+  ],
+  "downloadedSongs": [
+    {
+      "song_id": 11,
+      "artist_profile_id": 16,
+      "album_id": 11,
+      "category_id": 1,
+      "title": "Game O",
+      "description": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1200",
+      "duration": null,
+      "cover_image": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1200",
+      "audio_file": "76ca7d9a6ec8d53857df2713d8bf6a2a.mp3",
+      "release_date": null,
+      "is_published": true,
+      "created_at": "2026-07-10T19:29:23.000Z",
+      "updated_at": "2026-07-10T19:29:23.000Z",
+      "ArtistProfile": {
+        "stage_name": "Bilal Mayo"
+      },
+      "Album": {
+        "title": "Game On"
+      },
+      "Category": {
+        "name": "Pop"
+      }
+    }
+  ],
+  "notifications": [
+    {
+      "id": "notif_album_13",
+      "type": "album",
+      "targetId": 13,
+      "title": "New Album Released!",
+      "message": "Sidhu Moose Wala released a new album: \"PBX 1\"",
+      "timestamp": "2026-07-13T15:29:51.854Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_24",
+      "type": "song",
+      "targetId": 24,
+      "title": "New Song Released!",
+      "message": "Sidhu Moose Wala released a new song: \"The Last Ride\"",
+      "timestamp": "2026-07-13T15:29:51.853Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_23",
+      "type": "song",
+      "targetId": 23,
+      "title": "New Song Released!",
+      "message": "Sidhu Moose Wala released a new song: \"Mafia\"",
+      "timestamp": "2026-07-13T15:29:51.853Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_22",
+      "type": "song",
+      "targetId": 22,
+      "title": "New Song Released!",
+      "message": "Sidhu Moose Wala released a new song: \"Lock\"",
+      "timestamp": "2026-07-13T15:29:51.852Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_21",
+      "type": "song",
+      "targetId": 21,
+      "title": "New Song Released!",
+      "message": "Sidhu Moose Wala released a new song: \"jatt da muqabla\"",
+      "timestamp": "2026-07-13T15:29:51.852Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_20",
+      "type": "song",
+      "targetId": 20,
+      "title": "New Song Released!",
+      "message": "Sidhu Moose Wala released a new song: \"Goat\"",
+      "timestamp": "2026-07-13T15:29:51.852Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_19",
+      "type": "song",
+      "targetId": 19,
+      "title": "New Song Released!",
+      "message": "Sidhu Moose Wala released a new song: \"Eyes On\"",
+      "timestamp": "2026-07-13T15:29:51.851Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_18",
+      "type": "song",
+      "targetId": 18,
+      "title": "New Song Released!",
+      "message": "Sidhu Moose Wala released a new song: \"BAROTA  \"",
+      "timestamp": "2026-07-13T15:29:51.851Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_17",
+      "type": "song",
+      "targetId": 17,
+      "title": "New Song Released!",
+      "message": "Sidhu Moose Wala released a new song: \"295\"",
+      "timestamp": "2026-07-13T15:29:51.850Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_album_15",
+      "type": "album",
+      "targetId": 15,
+      "title": "New Album Released!",
+      "message": "Bilal Mayo released a new album: \"Arijit singh\"",
+      "timestamp": "2026-07-13T09:39:18.634Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_album_14",
+      "type": "album",
+      "targetId": 14,
+      "title": "New Album Released!",
+      "message": "Bilal Mayo released a new album: \"Arijit singh updated\"",
+      "timestamp": "2026-07-13T09:39:08.733Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_album_12",
+      "type": "album",
+      "targetId": 12,
+      "title": "New Album Released!",
+      "message": "Bilal Mayo released a new album: \"Dil Ki Dastaan\"",
+      "timestamp": "2026-07-13T09:39:08.732Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_album_11",
+      "type": "album",
+      "targetId": 11,
+      "title": "New Album Released!",
+      "message": "Bilal Mayo released a new album: \"Game On\"",
+      "timestamp": "2026-07-13T09:39:08.732Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_album_8",
+      "type": "album",
+      "targetId": 8,
+      "title": "New Album Released!",
+      "message": "Bilal Mayo released a new album: \"Punjabi\"",
+      "timestamp": "2026-07-13T09:39:08.731Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_31",
+      "type": "song",
+      "targetId": 31,
+      "title": "New Song Released!",
+      "message": "Bilal Mayo released a new song: \"Kabhi Jo Baadal Barse\"",
+      "timestamp": "2026-07-13T09:39:08.228Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_30",
+      "type": "song",
+      "targetId": 30,
+      "title": "New Song Released!",
+      "message": "Bilal Mayo released a new song: \"Test Song with Image 1783925533888\"",
+      "timestamp": "2026-07-13T09:39:08.228Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_16",
+      "type": "song",
+      "targetId": 16,
+      "title": "New Song Released!",
+      "message": "Bilal Mayo released a new song: \"alex-morgan\"",
+      "timestamp": "2026-07-13T09:39:08.227Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_15",
+      "type": "song",
+      "targetId": 15,
+      "title": "New Song Released!",
+      "message": "Bilal Mayo released a new song: \"Aaj\"",
+      "timestamp": "2026-07-13T09:39:08.227Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_14",
+      "type": "song",
+      "targetId": 14,
+      "title": "New Song Released!",
+      "message": "Bilal Mayo released a new song: \"Dooriyan\"",
+      "timestamp": "2026-07-13T09:39:08.227Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_13",
+      "type": "song",
+      "targetId": 13,
+      "title": "New Song Released!",
+      "message": "Bilal Mayo released a new song: \"Jab Se Tumko Dekha\"",
+      "timestamp": "2026-07-13T09:39:08.226Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_11",
+      "type": "song",
+      "targetId": 11,
+      "title": "New Song Released!",
+      "message": "Bilal Mayo released a new song: \"Game O\"",
+      "timestamp": "2026-07-13T09:39:08.226Z",
+      "read": true,
+      "cleared": true
+    },
+    {
+      "id": "notif_song_6",
+      "type": "song",
+      "targetId": 6,
+      "title": "New Song Released!",
+      "message": "Bilal Mayo released a new song: \"\tTrending Punjabi Romantic Song | Viral Love Vibes\"",
+      "timestamp": "2026-07-13T09:39:08.225Z",
+      "read": true,
+      "cleared": true
+    }
+  ]
+}

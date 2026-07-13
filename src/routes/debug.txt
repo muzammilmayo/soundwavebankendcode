@@ -1,0 +1,12 @@
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1783957537,"exp":1784043937}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1783957537,"exp":1784043937}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1783957537,"exp":1784043937}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.

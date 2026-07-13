@@ -17,14 +17,9 @@ function getUploadsDir() {
   return path.resolve(__dirname, '../uploads');
 }
 
-/**
- * Generates a publicly accessible URL for a given filename.
- * Assumes that the Express server serves the `/uploads` folder at `/uploads`.
- * @param {string} filename
- * @returns {string}
- */
 function getFileUrl(filename) {
-  return `/uploads/${filename}`;
+  const host = process.env.BACKEND_URL || 'http://localhost:5000';
+  return `${host}/uploads/${filename}`;
 }
 
 /**
