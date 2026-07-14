@@ -7,7 +7,7 @@ exports.getDashboard = (req, res) => {
   });
 };
 
-const { Song, ArtistProfile } = require('../models');
+const { Song, ArtistProfile, SongLike, ArtistFollower, Notification } = require('../models');
 
 exports.uploadSong = async (req, res) => {
   try {
@@ -36,6 +36,27 @@ exports.uploadSong = async (req, res) => {
       is_published: req.body.is_published !== undefined ? req.body.is_published : true,
     };
     const song = await Song.create(songData);
+
+    // Notify all followers
+    const followers = await ArtistFollower.findAll({
+      where: { artist_profile_id: profile.artist_profile_id }
+    });
+
+    if (followers.length > 0) {
+      const notificationsToCreate = followers.map(f => ({
+        id: "notif_song_" + song.song_id + "_" + f.user_id + "_" + Date.now(),
+        user_id: f.user_id,
+        type: "song",
+        target_id: song.song_id,
+        title: "New Song Uploaded!",
+        message: `${profile.stage_name || "Followed Artist"} uploaded a new song: "${song.title}"`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        cleared: false
+      }));
+      await Notification.bulkCreate(notificationsToCreate);
+    }
+
     res.json({ success: true, message: 'Song uploaded', data: song });
   } catch (err) {
     console.error(err);
@@ -94,7 +115,14 @@ exports.getSongs = async (req, res) => {
   try {
     const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
     if (!profile) return res.status(404).json({ success: false, message: 'Artist profile not found' });
-    const songs = await profile.getSongs();
+    const songs = await Song.findAll({
+      where: { artist_profile_id: profile.artist_profile_id },
+      include: [
+        {
+          model: SongLike
+        }
+      ]
+    });
     res.json({ success: true, data: songs });
   } catch (err) {
     console.error(err);

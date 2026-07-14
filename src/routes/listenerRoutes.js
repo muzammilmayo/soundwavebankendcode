@@ -42,4 +42,17 @@ router.post(
   listenerController.saveState
 );
 
+// Listening History
+router.post(
+  "/history",
+  verifyToken,
+  listenerController.recordSongPlay
+);
+
+router.get(
+  "/history",
+  verifyToken,
+  listenerController.getRecentlyPlayed
+);
+
 module.exports = router;

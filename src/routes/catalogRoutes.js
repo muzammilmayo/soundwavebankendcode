@@ -93,4 +93,11 @@ router.post('/categories', verifyToken, checkPermission('manage_catalog'), catal
 router.put('/categories/:id', verifyToken, checkPermission('manage_catalog'), catalogController.updateCategory);
 router.delete('/categories/:id', verifyToken, checkPermission('manage_catalog'), catalogController.deleteCategory);
 
+// Feedback Operations
+router.get('/feedbacks', catalogController.getFeedbacks);
+router.post('/feedbacks', verifyToken, catalogController.submitFeedback);
+router.put('/feedbacks/:id', verifyToken, catalogController.updateFeedback);
+router.delete('/feedbacks/:id', verifyToken, catalogController.deleteFeedback);
+router.post('/feedbacks/:id/like', verifyToken, catalogController.toggleLikeFeedback);
+
 module.exports = router;

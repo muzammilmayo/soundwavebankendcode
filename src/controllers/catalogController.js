@@ -1,6 +1,6 @@
 // backend/src/controllers/catalogController.js
 
-const { ArtistProfile, Album, Song, Category, User, Role } = require("../models");
+const { ArtistProfile, Album, Song, Category, User, Role, Feedback, ArtistFollower, Notification } = require("../models");
 const { Op } = require("sequelize");
 const mediaService = require("../services/mediaService");
 
@@ -192,6 +192,30 @@ exports.createSong = async (req, res) => {
     }
     const songData = { ...req.body, artist_profile_id: artistProfileId };
     const song = await Song.create(songData);
+
+    // Notify all followers
+    if (artistProfileId) {
+      const profile = await ArtistProfile.findByPk(artistProfileId);
+      const followers = await ArtistFollower.findAll({
+        where: { artist_profile_id: artistProfileId }
+      });
+
+      if (followers.length > 0) {
+        const notificationsToCreate = followers.map(f => ({
+          id: "notif_song_" + song.song_id + "_" + f.user_id + "_" + Date.now(),
+          user_id: f.user_id,
+          type: "song",
+          target_id: song.song_id,
+          title: "New Song Uploaded!",
+          message: `${profile?.stage_name || "Followed Artist"} uploaded a new song: "${song.title}"`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          cleared: false
+        }));
+        await Notification.bulkCreate(notificationsToCreate);
+      }
+    }
+
     res.status(201).json({ success: true, song });
   } catch (err) {
     console.error(err);
@@ -280,6 +304,131 @@ exports.deleteCategory = async (req, res) => {
   }
 };
 
+exports.getFeedbacks = async (req, res) => {
+  try {
+    const feedbacks = await Feedback.findAll({
+      include: [
+        {
+          model: Song,
+          attributes: ["title", "cover_image"]
+        }
+      ]
+    });
+    const formatted = feedbacks.map(f => {
+      const json = f.toJSON();
+      json.song_title = f.Song ? f.Song.title : "";
+      return json;
+    });
+    res.json({ success: true, feedbacks: formatted });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.submitFeedback = async (req, res) => {
+  try {
+    const { id, song_id, rating, comment } = req.body;
+    const user = await User.findByPk(req.user.id);
+    const username = user ? user.username : "Anonymous Listener";
+    
+    const feedback = await Feedback.create({
+      id: id || ("feed_" + Date.now()),
+      song_id,
+      user_id: req.user.id,
+      username,
+      rating,
+      comment,
+      timestamp: new Date().toISOString(),
+      edited: false,
+      likes: 0,
+      liked_by: []
+    });
+    
+    const songObj = await Song.findByPk(song_id);
+    const formatted = feedback.toJSON();
+    formatted.song_title = songObj ? songObj.title : "";
+
+    res.status(201).json({ success: true, feedback: formatted });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.updateFeedback = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rating, comment } = req.body;
+    const feedback = await Feedback.findByPk(id);
+    if (!feedback) return res.status(404).json({ success: false, message: "Feedback not found" });
+
+    if (feedback.user_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    await feedback.update({
+      rating,
+      comment,
+      edited: true,
+    });
+
+    const songObj = await Song.findByPk(feedback.song_id);
+    const formatted = feedback.toJSON();
+    formatted.song_title = songObj ? songObj.title : "";
+
+    res.json({ success: true, feedback: formatted });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.deleteFeedback = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const feedback = await Feedback.findByPk(id);
+    if (!feedback) return res.status(404).json({ success: false, message: "Feedback not found" });
+
+    if (feedback.user_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    await feedback.destroy();
+    res.json({ success: true, message: "Feedback deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.toggleLikeFeedback = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const feedback = await Feedback.findByPk(id);
+    if (!feedback) return res.status(404).json({ success: false, message: "Feedback not found" });
+
+    const userId = req.user.id;
+    let likedBy = feedback.liked_by || [];
+    const index = likedBy.indexOf(userId);
+    if (index === -1) {
+      likedBy.push(userId);
+    } else {
+      likedBy.splice(index, 1);
+    }
+
+    await feedback.update({
+      liked_by: likedBy,
+      likes: likedBy.length
+    });
+
+    res.json({ success: true, likes: feedback.likes, likedBy });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   // public
   browseArtists: exports.browseArtists,
@@ -296,4 +445,10 @@ module.exports = {
   createCategory: exports.createCategory,
   updateCategory: exports.updateCategory,
   deleteCategory: exports.deleteCategory,
+  // feedback
+  getFeedbacks: exports.getFeedbacks,
+  submitFeedback: exports.submitFeedback,
+  updateFeedback: exports.updateFeedback,
+  deleteFeedback: exports.deleteFeedback,
+  toggleLikeFeedback: exports.toggleLikeFeedback,
 };

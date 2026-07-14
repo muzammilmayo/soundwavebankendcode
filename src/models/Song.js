@@ -17,6 +17,11 @@ module.exports = (sequelize, DataTypes) => {
       audio_file: DataTypes.STRING,
       release_date: DataTypes.DATEONLY,
       is_published: DataTypes.BOOLEAN,
+      play_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        allowNull: false,
+      },
     },
     {
       tableName: "songs",
