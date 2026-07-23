@@ -28,4 +28,31 @@ router.post(
   listenerController.createPlaylist
 );
 
+// Get User State (Playlists, Likes, Saved Albums, Followed Artists)
+router.get(
+  "/state",
+  verifyToken,
+  listenerController.getState
+);
+
+// Save User State (Playlists, Likes, Saved Albums, Followed Artists)
+router.post(
+  "/state",
+  verifyToken,
+  listenerController.saveState
+);
+
+// Listening History
+router.post(
+  "/history",
+  verifyToken,
+  listenerController.recordSongPlay
+);
+
+router.get(
+  "/history",
+  verifyToken,
+  listenerController.getRecentlyPlayed
+);
+
 module.exports = router;

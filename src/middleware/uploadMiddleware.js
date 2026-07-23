@@ -18,13 +18,24 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter – allow only audio files (mp3, wav, flac, etc.)
+// File filter – allow only audio files for 'audio' field, and image files for 'cover_image' field
 const fileFilter = (req, file, cb) => {
-  const allowed = /\.(mp3|wav|flac|aac|m4a)$/i;
-  if (allowed.test(file.originalname)) {
-    cb(null, true);
+  if (file.fieldname === 'audio') {
+    const allowedAudio = /\.(mp3|wav|flac|aac|m4a)$/i;
+    if (allowedAudio.test(file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Unsupported audio file type'), false);
+    }
+  } else if (file.fieldname === 'cover_image') {
+    const allowedImage = /\.(jpg|jpeg|png|gif|webp)$/i;
+    if (allowedImage.test(file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Unsupported image file type'), false);
+    }
   } else {
-    cb(new Error('Unsupported file type'), false);
+    cb(new Error('Unexpected fieldname: ' + file.fieldname), false);
   }
 };
 

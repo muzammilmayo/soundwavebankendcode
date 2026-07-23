@@ -11,10 +11,8 @@ function checkPermission(requiredPermission) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    // Fallback: lookup user in DB if role_id is not in JWT payload
-    const roleIdPromise = user.role_id 
-      ? Promise.resolve(user.role_id) 
-      : User.findByPk(user.id).then(u => u?.role_id);
+    // Always query database to get the latest role assignment
+    const roleIdPromise = User.findByPk(user.id).then(u => u?.role_id);
 
     roleIdPromise
       .then(roleId => {

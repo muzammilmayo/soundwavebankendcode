@@ -53,4 +53,12 @@ router.put(
   adminController.moderateContent
 );
 
+// Toggle Artist Verification
+router.put(
+  "/artists/:id/verify",
+  verifyToken,
+  checkPermission("manage_users"),
+  adminController.toggleArtistVerification
+);
+
 module.exports = router;

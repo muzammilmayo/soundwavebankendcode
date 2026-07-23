@@ -12,7 +12,21 @@ module.exports = (sequelize, DataTypes) => {
       description: DataTypes.TEXT,
       cover_image: DataTypes.STRING,
       release_date: DataTypes.DATEONLY,
-      is_published: DataTypes.BOOLEAN,
+      status: {
+        type: DataTypes.STRING(50),
+        defaultValue: 'draft',
+        allowNull: false,
+      },
+      scheduled_for: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      is_published: {
+        type: DataTypes.VIRTUAL,
+        get() {
+          return this.getDataValue('status') === 'published';
+        }
+      },
     },
     {
       tableName: "albums",

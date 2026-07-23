@@ -18,7 +18,10 @@ router.post(
   "/songs/upload",
   verifyToken,
   checkPermission("upload_song"),
-  upload.single('audio'),
+  upload.fields([
+    { name: 'audio', maxCount: 1 },
+    { name: 'cover_image', maxCount: 1 }
+  ]),
   artistController.uploadSong
 );
 
