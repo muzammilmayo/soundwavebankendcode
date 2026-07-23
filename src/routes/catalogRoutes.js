@@ -89,6 +89,14 @@ router.put('/songs/:id', verifyToken, checkArtistOrAdmin('manage_catalog'), cata
 router.delete('/songs/:id', verifyToken, checkArtistOrAdmin('manage_catalog'), catalogController.deleteSong);
 
 // Category Operations (Admin only)
+
+// Draft Songs Endpoints (placeholder handlers)
+router.get('/songs/drafts', verifyToken, catalogController.listDraftSongs);
+router.post('/songs/draft', verifyToken, catalogController.createDraftSong);
+router.put('/songs/draft/:id', verifyToken, catalogController.updateDraftSong);
+router.delete('/songs/draft/:id', verifyToken, catalogController.deleteDraftSong);
+router.post('/songs/draft/:id/publish', verifyToken, catalogController.publishDraftSong);
+
 router.post('/categories', verifyToken, checkPermission('manage_catalog'), catalogController.createCategory);
 router.put('/categories/:id', verifyToken, checkPermission('manage_catalog'), catalogController.updateCategory);
 router.delete('/categories/:id', verifyToken, checkPermission('manage_catalog'), catalogController.deleteCategory);

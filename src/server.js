@@ -46,4 +46,8 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server Running on Port ${PORT}`);
+  
+  // Start Content Scheduler
+  const schedulerService = require('./services/schedulerService');
+  schedulerService.start(); // defaults to every 60 seconds
 });

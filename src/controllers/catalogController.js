@@ -32,7 +32,7 @@ exports.browseArtists = async (req, res) => {
 exports.browseAlbums = async (req, res) => {
   try {
     const { search } = req.query;
-    const whereClause = { is_published: true };
+    const whereClause = { status: 'published' };
     if (search) {
       whereClause[Op.or] = [
         { title: { [Op.like]: `%${search}%` } },
@@ -53,7 +53,7 @@ exports.browseAlbums = async (req, res) => {
 exports.browseSongs = async (req, res) => {
   try {
     const { search, category } = req.query;
-    const whereClause = { is_published: true };
+    const whereClause = { status: 'published' };
 
     if (category) {
       whereClause.category_id = category;
@@ -103,18 +103,23 @@ exports.createAlbum = async (req, res) => {
       if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
       artistProfileId = profile.artist_profile_id;
     }
-    const { title, description, release_date } = req.body;
+    const { title, description, release_date, status, scheduled_for } = req.body;
     let cover_image = req.body.cover_image;
     if (req.file) {
       cover_image = mediaService.getFileUrl(req.file.filename);
     }
+
+    let computedStatus = status || 'draft';
+    if (req.body.is_published !== undefined) computedStatus = req.body.is_published ? 'published' : 'draft';
+
     const album = await Album.create({ 
       artist_profile_id: artistProfileId, 
       title, 
       description, 
       cover_image, 
       release_date,
-      is_published: true 
+      status: computedStatus,
+      scheduled_for: scheduled_for || null
     });
     res.status(201).json({ success: true, album });
   } catch (err) {
@@ -138,13 +143,16 @@ exports.updateAlbum = async (req, res) => {
       }
     }
 
-    const { title, description, release_date } = req.body;
+    const { title, description, release_date, status, scheduled_for } = req.body;
     let cover_image = req.body.cover_image;
     if (req.file) {
       cover_image = mediaService.getFileUrl(req.file.filename);
     }
 
     const updateData = { title, description, release_date };
+    if (status !== undefined) updateData.status = status;
+    if (scheduled_for !== undefined) updateData.scheduled_for = scheduled_for;
+    if (req.body.is_published !== undefined) updateData.status = req.body.is_published ? 'published' : 'draft';
     if (cover_image !== undefined) {
       updateData.cover_image = cover_image;
     }
@@ -191,6 +199,11 @@ exports.createSong = async (req, res) => {
       artistProfileId = profile.artist_profile_id;
     }
     const songData = { ...req.body, artist_profile_id: artistProfileId };
+    if (!songData.status) songData.status = 'draft';
+    if (songData.is_published !== undefined) {
+      songData.status = songData.is_published ? 'published' : 'draft';
+      delete songData.is_published;
+    }
     const song = await Song.create(songData);
 
     // Notify all followers
@@ -238,7 +251,12 @@ exports.updateSong = async (req, res) => {
       }
     }
 
-    await song.update(req.body);
+    const updateData = { ...req.body };
+    if (updateData.is_published !== undefined) {
+      updateData.status = updateData.is_published ? 'published' : 'draft';
+      delete updateData.is_published;
+    }
+    await song.update(updateData);
     res.json({ success: true, song });
   } catch (err) {
     console.error(err);
@@ -263,6 +281,117 @@ exports.deleteSong = async (req, res) => {
 
     await song.destroy();
     res.json({ success: true, message: "Song deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Draft Songs Endpoints
+
+/** List Draft Songs for the authenticated artist */
+exports.listDraftSongs = async (req, res) => {
+  try {
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    let whereClause = { status: 'draft' };
+    if (role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile) return res.status(404).json({ success: false, message: 'Artist profile not found' });
+      whereClause.artist_profile_id = profile.artist_profile_id;
+    }
+    const drafts = await Song.findAll({ where: whereClause, include: [{ model: Album, attributes: ['title'] }, { model: Category, attributes: ['name'] }] });
+    res.json({ success: true, drafts });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/** Create a draft song */
+exports.createDraftSong = async (req, res) => {
+  try {
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    let artistProfileId = req.body.artist_profile_id;
+    if (role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile) return res.status(404).json({ success: false, message: 'Artist profile not found' });
+      artistProfileId = profile.artist_profile_id;
+    }
+    const songData = { ...req.body, artist_profile_id: artistProfileId, status: 'draft' };
+    const song = await Song.create(songData);
+    res.status(201).json({ success: true, song });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/** Update a draft song */
+exports.updateDraftSong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const song = await Song.findByPk(id);
+    if (!song) return res.status(404).json({ success: false, message: 'Song not found' });
+    if (song.status !== 'draft') return res.status(400).json({ success: false, message: 'Only draft songs can be updated via this endpoint' });
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    if (role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile || song.artist_profile_id != profile.artist_profile_id) {
+        return res.status(403).json({ success: false, message: "Forbidden: Cannot modify another artist's draft song" });
+      }
+    }
+    const updateData = { ...req.body };
+    await song.update(updateData);
+    res.json({ success: true, song });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/** Delete a draft song */
+exports.deleteDraftSong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const song = await Song.findByPk(id);
+    if (!song) return res.status(404).json({ success: false, message: 'Song not found' });
+    if (song.status !== 'draft') return res.status(400).json({ success: false, message: 'Only draft songs can be deleted via this endpoint' });
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    if (role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile || song.artist_profile_id != profile.artist_profile_id) {
+        return res.status(403).json({ success: false, message: "Forbidden: Cannot delete another artist's draft song" });
+      }
+    }
+    await song.destroy();
+    res.json({ success: true, message: 'Draft song deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/** Publish a draft song */
+exports.publishDraftSong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const song = await Song.findByPk(id);
+    if (!song) return res.status(404).json({ success: false, message: 'Song not found' });
+    if (song.status !== 'draft') return res.status(400).json({ success: false, message: 'Only draft songs can be published via this endpoint' });
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    if (role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile || song.artist_profile_id != profile.artist_profile_id) {
+        return res.status(403).json({ success: false, message: "Forbidden: Cannot publish another artist's draft song" });
+      }
+    }
+    await song.update({ status: 'published', scheduled_for: null });
+    res.json({ success: true, song });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -451,4 +580,10 @@ module.exports = {
   updateFeedback: exports.updateFeedback,
   deleteFeedback: exports.deleteFeedback,
   toggleLikeFeedback: exports.toggleLikeFeedback,
+  // Draft song endpoints
+  listDraftSongs: exports.listDraftSongs,
+  createDraftSong: exports.createDraftSong,
+  updateDraftSong: exports.updateDraftSong,
+  deleteDraftSong: exports.deleteDraftSong,
+  publishDraftSong: exports.publishDraftSong,
 };

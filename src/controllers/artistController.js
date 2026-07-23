@@ -24,6 +24,11 @@ exports.uploadSong = async (req, res) => {
       cover_image = mediaService.getFileUrl(coverImageFile.filename);
     }
 
+    let status = req.body.status || 'draft';
+    if (req.body.is_published !== undefined) {
+      status = req.body.is_published ? 'published' : 'draft';
+    }
+
     const songData = {
       artist_profile_id: profile.artist_profile_id,
       audio_file: audioFile.filename,
@@ -33,28 +38,31 @@ exports.uploadSong = async (req, res) => {
       category_id: req.body.category_id || null,
       album_id: req.body.album_id || null,
       cover_image: cover_image,
-      is_published: req.body.is_published !== undefined ? req.body.is_published : true,
+      status: status,
+      scheduled_for: req.body.scheduled_for || null
     };
     const song = await Song.create(songData);
 
-    // Notify all followers
-    const followers = await ArtistFollower.findAll({
-      where: { artist_profile_id: profile.artist_profile_id }
-    });
+    // Notify all followers if published immediately
+    if (status === 'published') {
+      const followers = await ArtistFollower.findAll({
+        where: { artist_profile_id: profile.artist_profile_id }
+      });
 
-    if (followers.length > 0) {
-      const notificationsToCreate = followers.map(f => ({
-        id: "notif_song_" + song.song_id + "_" + f.user_id + "_" + Date.now(),
-        user_id: f.user_id,
-        type: "song",
-        target_id: song.song_id,
-        title: "New Song Uploaded!",
-        message: `${profile.stage_name || "Followed Artist"} uploaded a new song: "${song.title}"`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        cleared: false
-      }));
-      await Notification.bulkCreate(notificationsToCreate);
+      if (followers.length > 0) {
+        const notificationsToCreate = followers.map(f => ({
+          id: "notif_song_" + song.song_id + "_" + f.user_id + "_" + Date.now(),
+          user_id: f.user_id,
+          type: "song",
+          target_id: song.song_id,
+          title: "New Song Uploaded!",
+          message: `${profile.stage_name || "Followed Artist"} uploaded a new song: "${song.title}"`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          cleared: false
+        }));
+        await Notification.bulkCreate(notificationsToCreate);
+      }
     }
 
     res.json({ success: true, message: 'Song uploaded', data: song });
@@ -64,11 +72,33 @@ exports.uploadSong = async (req, res) => {
   }
 };
 
-exports.editSong = (req, res) => {
-  res.json({
-    success: true,
-    message: "Song Updated Successfully"
-  });
+exports.editSong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (!profile) return res.status(404).json({ success: false, message: 'Artist profile not found' });
+
+    const song = await Song.findOne({ where: { song_id: id, artist_profile_id: profile.artist_profile_id } });
+    if (!song) return res.status(404).json({ success: false, message: 'Song not found or unauthorized' });
+
+    const updateData = { ...req.body };
+    
+    if (updateData.is_published !== undefined) {
+      updateData.status = updateData.is_published ? 'published' : 'draft';
+      delete updateData.is_published;
+    }
+
+    await song.update(updateData);
+
+    res.json({
+      success: true,
+      message: "Song Updated Successfully",
+      data: song
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
 };
 
 // New profile & catalog functions

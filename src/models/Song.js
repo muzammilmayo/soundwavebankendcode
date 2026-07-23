@@ -16,7 +16,21 @@ module.exports = (sequelize, DataTypes) => {
       cover_image: DataTypes.STRING,
       audio_file: DataTypes.STRING,
       release_date: DataTypes.DATEONLY,
-      is_published: DataTypes.BOOLEAN,
+      status: {
+        type: DataTypes.STRING(50),
+        defaultValue: 'draft',
+        allowNull: false,
+      },
+      scheduled_for: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      is_published: {
+        type: DataTypes.VIRTUAL,
+        get() {
+          return this.getDataValue('status') === 'published';
+        }
+      },
       play_count: {
         type: DataTypes.INTEGER,
         defaultValue: 0,
