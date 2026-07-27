@@ -12,6 +12,8 @@ const ListeningHistory = require("./ListeningHistory");
 const Notification = require("./Notification");
 const Playlist = require("./Playlist");
 const PlaylistSong = require("./PlaylistSong");
+const InteractionLog = require("./InteractionLog");
+const Report = require("./Report");
 
 // Import catalog models by calling their initializer functions
 const Category = require("./Category")(sequelize, DataTypes);
@@ -104,6 +106,14 @@ ListeningHistory.belongsTo(User, { foreignKey: "user_id" });
 User.hasMany(Notification, { foreignKey: "user_id", onDelete: "CASCADE" });
 Notification.belongsTo(User, { foreignKey: "user_id" });
 
+// User & InteractionLog
+User.hasMany(InteractionLog, { foreignKey: "user_id", onDelete: "CASCADE" });
+InteractionLog.belongsTo(User, { foreignKey: "user_id" });
+
+// User & Report
+User.hasMany(Report, { foreignKey: "user_id", onDelete: "CASCADE" });
+Report.belongsTo(User, { foreignKey: "user_id" });
+
 // User & Playlists
 User.hasMany(Playlist, { foreignKey: "user_id", onDelete: "CASCADE" });
 Playlist.belongsTo(User, { foreignKey: "user_id" });
@@ -136,4 +146,6 @@ module.exports = {
   Notification,
   Playlist,
   PlaylistSong,
+  InteractionLog,
+  Report,
 };

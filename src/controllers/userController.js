@@ -36,8 +36,16 @@ exports.updateProfile = async (req, res) => {
   const phoneToSave = phone !== undefined ? phone : phone_number;
 
   try {
+    const oldProfile = await UserModel.findProfileById(userId);
+    const oldAvatar = oldProfile ? oldProfile.avatar : null;
+
     await UserModel.updateProfile(userId, { username, address, avatar, phone: phoneToSave });
     
+    if (avatar && avatar !== oldAvatar) {
+      const mediaService = require("../services/mediaService");
+      await mediaService.deleteFileByUrl(oldAvatar);
+    }
+
     // Fetch updated record
     const updated = await UserModel.findProfileById(userId);
 
@@ -81,7 +89,12 @@ exports.deleteAccount = async (req, res) => {
       });
     }
 
+    const avatar = user.avatar;
     await UserModel.deleteById(userId);
+    if (avatar) {
+      const mediaService = require("../services/mediaService");
+      await mediaService.deleteFileByUrl(avatar);
+    }
 
     return res.json({
       success: true,

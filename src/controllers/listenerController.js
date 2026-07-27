@@ -1,7 +1,7 @@
 // listenerController.js
 const fs = require('fs');
 const path = require('path');
-const { SongLike, ArtistFollower, Song, ArtistProfile, SavedAlbum, Album, ListeningHistory, Notification, Playlist, PlaylistSong } = require("../models");
+const { SongLike, ArtistFollower, Song, ArtistProfile, SavedAlbum, Album, ListeningHistory, Notification, Playlist, PlaylistSong, InteractionLog } = require("../models");
 
 const getStateFilePath = (userId) => {
   return path.join(__dirname, '../uploads', `userState_${userId}.json`);
@@ -146,9 +146,21 @@ exports.saveState = async (req, res) => {
 
     if (toAddLikes.length > 0) {
       await SongLike.bulkCreate(toAddLikes.map(songId => ({ user_id: userId, song_id: songId })));
+      await InteractionLog.bulkCreate(toAddLikes.map(songId => ({
+        user_id: userId,
+        interaction_type: "like",
+        target_type: "song",
+        target_id: String(songId)
+      })));
     }
     if (toRemoveLikes.length > 0) {
       await SongLike.destroy({ where: { user_id: userId, song_id: toRemoveLikes } });
+      await InteractionLog.bulkCreate(toRemoveLikes.map(songId => ({
+        user_id: userId,
+        interaction_type: "unlike",
+        target_type: "song",
+        target_id: String(songId)
+      })));
     }
 
     // 3. Sync Followed Artists to Database
@@ -163,9 +175,21 @@ exports.saveState = async (req, res) => {
 
     if (toAddFollows.length > 0) {
       await ArtistFollower.bulkCreate(toAddFollows.map(artistProfileId => ({ user_id: userId, artist_profile_id: artistProfileId })));
+      await InteractionLog.bulkCreate(toAddFollows.map(artistProfileId => ({
+        user_id: userId,
+        interaction_type: "follow",
+        target_type: "artist",
+        target_id: String(artistProfileId)
+      })));
     }
     if (toRemoveFollows.length > 0) {
       await ArtistFollower.destroy({ where: { user_id: userId, artist_profile_id: toRemoveFollows } });
+      await InteractionLog.bulkCreate(toRemoveFollows.map(artistProfileId => ({
+        user_id: userId,
+        interaction_type: "unfollow",
+        target_type: "artist",
+        target_id: String(artistProfileId)
+      })));
     }
 
     // 4. Sync Saved Albums to Database
@@ -180,9 +204,21 @@ exports.saveState = async (req, res) => {
 
     if (toAddSaved.length > 0) {
       await SavedAlbum.bulkCreate(toAddSaved.map(albumId => ({ user_id: userId, album_id: albumId })));
+      await InteractionLog.bulkCreate(toAddSaved.map(albumId => ({
+        user_id: userId,
+        interaction_type: "save_album",
+        target_type: "album",
+        target_id: String(albumId)
+      })));
     }
     if (toRemoveSaved.length > 0) {
       await SavedAlbum.destroy({ where: { user_id: userId, album_id: toRemoveSaved } });
+      await InteractionLog.bulkCreate(toRemoveSaved.map(albumId => ({
+        user_id: userId,
+        interaction_type: "unsave_album",
+        target_type: "album",
+        target_id: String(albumId)
+      })));
     }
 
     // 5. Sync Notifications to Database
@@ -227,9 +263,19 @@ exports.saveState = async (req, res) => {
         await Playlist.update({ name: playlist.name }, { where: { id: playlist.id } });
       } else {
         await Playlist.create({ id: playlist.id, name: playlist.name, user_id: userId });
+        await InteractionLog.create({
+          user_id: userId,
+          interaction_type: "create_playlist",
+          target_type: "playlist",
+          target_id: String(playlist.id),
+          details: playlist.name
+        });
       }
 
       // Sync playlist songs (simplest is clear and rebuild to keep indices sequential & correct)
+      const oldPlaylistSongs = await PlaylistSong.findAll({ where: { playlist_id: playlist.id } });
+      const oldSongIds = oldPlaylistSongs.map(ps => ps.song_id);
+
       await PlaylistSong.destroy({ where: { playlist_id: playlist.id } });
       if (playlist.songs && playlist.songs.length > 0) {
         const bulkSongs = playlist.songs.map((song, idx) => ({
@@ -238,6 +284,17 @@ exports.saveState = async (req, res) => {
           order: idx
         }));
         await PlaylistSong.bulkCreate(bulkSongs);
+
+        const newlyAddedSongIds = playlist.songs.map(s => s.song_id).filter(id => !oldSongIds.includes(id));
+        if (newlyAddedSongIds.length > 0) {
+          await InteractionLog.bulkCreate(newlyAddedSongIds.map(songId => ({
+            user_id: userId,
+            interaction_type: "add_to_playlist",
+            target_type: "song",
+            target_id: String(songId),
+            details: String(playlist.id)
+          })));
+        }
       }
     }
 
@@ -264,6 +321,13 @@ exports.recordSongPlay = async (req, res) => {
       user_id: userId,
       song_id: songId,
       played_at: new Date().toISOString()
+    });
+
+    await InteractionLog.create({
+      user_id: userId,
+      interaction_type: "play",
+      target_type: "song",
+      target_id: String(songId)
     });
 
     // Increment play_count of the song

@@ -20,7 +20,7 @@ exports.browseArtists = async (req, res) => {
     const artists = await ArtistProfile.findAll({
       where: whereClause,
       attributes: { exclude: ["created_at", "updated_at"] },
-      include: [{ model: User, attributes: ["username", "email"] }],
+      include: [{ model: User, attributes: ["username", "email"], where: { status: "Active" } }],
     });
     res.json({ success: true, artists });
   } catch (err) {
@@ -41,7 +41,13 @@ exports.browseAlbums = async (req, res) => {
     }
     const albums = await Album.findAll({
       where: whereClause,
-      include: [{ model: ArtistProfile, attributes: ["stage_name"] }],
+      include: [
+        { 
+          model: ArtistProfile, 
+          attributes: ["stage_name"],
+          include: [{ model: User, attributes: [], where: { status: "Active" } }]
+        }
+      ],
     });
     res.json({ success: true, albums });
   } catch (err) {
@@ -64,12 +70,26 @@ exports.browseSongs = async (req, res) => {
         { title: { [Op.like]: `%${search}%` } },
         { "$ArtistProfile.stage_name$": { [Op.like]: `%${search}%` } }
       ];
+
+      // Log search interaction in background (non-blocking)
+      const { InteractionLog } = require('../models');
+      InteractionLog.create({
+        user_id: req.user ? req.user.id : null,
+        interaction_type: "search",
+        target_type: "none",
+        target_id: null,
+        details: search
+      }).catch(err => console.error("[CatalogController] Error logging search:", err));
     }
 
     const songs = await Song.findAll({
       where: whereClause,
       include: [
-        { model: ArtistProfile, attributes: ["stage_name"] },
+        { 
+          model: ArtistProfile, 
+          attributes: ["stage_name"],
+          include: [{ model: User, attributes: [], where: { status: "Active" } }]
+        },
         { model: Album, attributes: ["title"] },
         { model: Category, attributes: ["name"] },
       ],
@@ -157,7 +177,11 @@ exports.updateAlbum = async (req, res) => {
       updateData.cover_image = cover_image;
     }
 
+    const oldCover = album.cover_image;
     await album.update(updateData);
+    if (updateData.cover_image && updateData.cover_image !== oldCover) {
+      await mediaService.deleteFileByUrl(oldCover);
+    }
     res.json({ success: true, album });
   } catch (err) {
     console.error(err);
@@ -180,7 +204,11 @@ exports.deleteAlbum = async (req, res) => {
       }
     }
 
+    const coverImage = album.cover_image;
     await album.destroy();
+    if (coverImage) {
+      await mediaService.deleteFileByUrl(coverImage);
+    }
     res.json({ success: true, message: "Album deleted" });
   } catch (err) {
     console.error(err);
@@ -256,7 +284,15 @@ exports.updateSong = async (req, res) => {
       updateData.status = updateData.is_published ? 'published' : 'draft';
       delete updateData.is_published;
     }
+    const oldAudio = song.audio_file;
+    const oldCover = song.cover_image;
     await song.update(updateData);
+    if (updateData.audio_file && updateData.audio_file !== oldAudio) {
+      await mediaService.deleteFileByUrl(oldAudio);
+    }
+    if (updateData.cover_image && updateData.cover_image !== oldCover) {
+      await mediaService.deleteFileByUrl(oldCover);
+    }
     res.json({ success: true, song });
   } catch (err) {
     console.error(err);
@@ -279,7 +315,15 @@ exports.deleteSong = async (req, res) => {
       }
     }
 
+    const audioFile = song.audio_file;
+    const coverImage = song.cover_image;
     await song.destroy();
+    if (audioFile) {
+      await mediaService.deleteFileByUrl(audioFile);
+    }
+    if (coverImage) {
+      await mediaService.deleteFileByUrl(coverImage);
+    }
     res.json({ success: true, message: "Song deleted" });
   } catch (err) {
     console.error(err);

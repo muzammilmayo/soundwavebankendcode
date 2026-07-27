@@ -68,6 +68,13 @@ exports.uploadSong = async (req, res) => {
     res.json({ success: true, message: 'Song uploaded', data: song });
   } catch (err) {
     console.error(err);
+    const mediaService = require('../services/mediaService');
+    if (audioFile) {
+      await mediaService.deleteFileByUrl(audioFile.filename);
+    }
+    if (coverImageFile) {
+      await mediaService.deleteFileByUrl(coverImageFile.filename);
+    }
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -88,7 +95,16 @@ exports.editSong = async (req, res) => {
       delete updateData.is_published;
     }
 
+    const oldAudio = song.audio_file;
+    const oldCover = song.cover_image;
     await song.update(updateData);
+    const mediaService = require('../services/mediaService');
+    if (updateData.audio_file && updateData.audio_file !== oldAudio) {
+      await mediaService.deleteFileByUrl(oldAudio);
+    }
+    if (updateData.cover_image && updateData.cover_image !== oldCover) {
+      await mediaService.deleteFileByUrl(oldCover);
+    }
 
     res.json({
       success: true,
@@ -120,8 +136,20 @@ exports.updateProfile = async (req, res) => {
     
     // Destructure allowed update fields to strip out is_verified
     const { stage_name, bio, profile_image, cover_image, facebook, instagram, youtube, spotify } = req.body;
+    
+    const oldProfileImage = profile.profile_image;
+    const oldCoverImage = profile.cover_image;
+
     await profile.update({ stage_name, bio, profile_image, cover_image, facebook, instagram, youtube, spotify });
     
+    const mediaService = require('../services/mediaService');
+    if (profile_image && profile_image !== oldProfileImage) {
+      await mediaService.deleteFileByUrl(oldProfileImage);
+    }
+    if (cover_image && cover_image !== oldCoverImage) {
+      await mediaService.deleteFileByUrl(oldCoverImage);
+    }
+
     res.json({ success: true, message: 'Profile updated', data: profile });
   } catch (err) {
     console.error(err);
