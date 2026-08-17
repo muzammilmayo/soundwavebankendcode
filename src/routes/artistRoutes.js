@@ -23,10 +23,13 @@ router.get(
   artistController.getAnalytics
 );
 
+const { uploadLimiter } = require("../middleware/rateLimiter");
+
 // Upload Song
 router.post(
   "/songs/upload",
   verifyToken,
+  uploadLimiter,
   artistModeratorMiddleware,
   checkPermission("upload_song"),
   upload.fields([

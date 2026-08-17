@@ -3,13 +3,17 @@
 const { ArtistProfile, Album, Song, Category, User, Role, Feedback, ArtistFollower, Notification, InteractionLog } = require("../models");
 const { Op, Sequelize } = require("sequelize");
 const mediaService = require("../services/mediaService");
+const cacheService = require("../services/cacheService");
+const RequestValidator = require("../validators");
 
 /** ---------------------------------------------------------------
- * PUBLIC ENDPOINTS – accessible to any logged‑in user (or even unauth).
+ * PUBLIC ENDPOINTS – accessible to any logged‑in user (or unauth)
  * --------------------------------------------------------------- */
 exports.browseArtists = async (req, res) => {
   try {
-    const { search, page, limit } = req.query;
+    const { search } = req.query;
+    const { page, limit, offset } = RequestValidator.sanitizePagination(req.query, 10, 50);
+
     const whereClause = {};
     if (search) {
       whereClause[Op.or] = [
@@ -17,43 +21,40 @@ exports.browseArtists = async (req, res) => {
         { bio: { [Op.like]: `%${search}%` } }
       ];
     }
-    
-    // Pagination
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 10;
-    const offset = (pageNum - 1) * limitNum;
 
     const { count, rows } = await ArtistProfile.findAndCountAll({
       where: whereClause,
       attributes: { exclude: ["created_at", "updated_at"] },
       include: [{ model: User, attributes: ["username", "email"], where: { status: "Active" } }],
-      limit: limitNum,
-      offset: offset,
+      limit,
+      offset,
       distinct: true
     });
 
-    const totalPages = Math.ceil(count / limitNum);
+    const totalPages = Math.ceil(count / limit);
 
     res.json({ 
       success: true, 
       artists: rows,
       pagination: {
         totalRecords: count,
-        currentPage: pageNum,
+        currentPage: page,
         totalPages,
-        hasNext: pageNum < totalPages,
-        hasPrevious: pageNum > 1
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[browseArtists Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to browse artists." });
   }
 };
 
 exports.browseAlbums = async (req, res) => {
   try {
-    const { search, page, limit } = req.query;
+    const { search } = req.query;
+    const { page, limit, offset } = RequestValidator.sanitizePagination(req.query, 10, 50);
+
     const whereClause = { status: 'published' };
     if (search) {
       whereClause[Op.or] = [
@@ -61,11 +62,6 @@ exports.browseAlbums = async (req, res) => {
         { "$ArtistProfile.stage_name$": { [Op.like]: `%${search}%` } }
       ];
     }
-
-    // Pagination
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 10;
-    const offset = (pageNum - 1) * limitNum;
 
     const { count, rows } = await Album.findAndCountAll({
       where: whereClause,
@@ -76,36 +72,37 @@ exports.browseAlbums = async (req, res) => {
           include: [{ model: User, attributes: [], where: { status: "Active" } }]
         }
       ],
-      limit: limitNum,
-      offset: offset,
+      limit,
+      offset,
       distinct: true
     });
 
-    const totalPages = Math.ceil(count / limitNum);
+    const totalPages = Math.ceil(count / limit);
 
     res.json({ 
       success: true, 
       albums: rows,
       pagination: {
         totalRecords: count,
-        currentPage: pageNum,
+        currentPage: page,
         totalPages,
-        hasNext: pageNum < totalPages,
-        hasPrevious: pageNum > 1
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[browseAlbums Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to browse albums." });
   }
 };
 
 exports.browseSongs = async (req, res) => {
   try {
-    const { search, category, artist, album, year, duration, status, sort, page, limit } = req.query;
+    const { search, category, artist, album, year, duration, status, sort } = req.query;
+    const { page, limit, offset } = RequestValidator.sanitizePagination(req.query, 10, 50);
     const whereClause = {};
 
-    // Lifecycle/status filtering: Listeners can only see published, Admin/Mod/Artist own see others
+    // Lifecycle/status filtering
     let allowedStatuses = ['published'];
     if (req.user) {
       const user = await User.findByPk(req.user.id);
@@ -131,22 +128,10 @@ exports.browseSongs = async (req, res) => {
       }
     }
 
-    // Genre (category) filter
-    if (category) {
-      whereClause.category_id = category;
-    }
+    if (category) whereClause.category_id = category;
+    if (artist) whereClause.artist_profile_id = artist;
+    if (album) whereClause.album_id = album;
 
-    // Artist filter
-    if (artist) {
-      whereClause.artist_profile_id = artist;
-    }
-
-    // Album filter
-    if (album) {
-      whereClause.album_id = album;
-    }
-
-    // Release Year filter
     if (year) {
       whereClause.release_date = Sequelize.where(
         Sequelize.fn('YEAR', Sequelize.col('Song.release_date')),
@@ -154,18 +139,12 @@ exports.browseSongs = async (req, res) => {
       );
     }
 
-    // Duration filter
     if (duration) {
-      if (duration === "short") {
-        whereClause.duration = { [Op.lt]: 180 }; // < 3 minutes
-      } else if (duration === "medium") {
-        whereClause.duration = { [Op.between]: [180, 300] }; // 3-5 minutes
-      } else if (duration === "long") {
-        whereClause.duration = { [Op.gt]: 300 }; // > 5 minutes
-      }
+      if (duration === "short") whereClause.duration = { [Op.lt]: 180 };
+      else if (duration === "medium") whereClause.duration = { [Op.between]: [180, 300] };
+      else if (duration === "long") whereClause.duration = { [Op.gt]: 300 };
     }
 
-    // Advanced Multi-Field Search (includes tags)
     if (search) {
       const searchConditions = [
         { title: { [Op.like]: `%${search}%` } },
@@ -175,7 +154,6 @@ exports.browseSongs = async (req, res) => {
         { '$Category.name$': { [Op.like]: `%${search}%` } }
       ];
       if (whereClause[Op.or]) {
-        // Compound condition for Artist own tracks + search filter
         whereClause[Op.and] = [
           { [Op.or]: whereClause[Op.or] },
           { [Op.or]: searchConditions }
@@ -185,7 +163,6 @@ exports.browseSongs = async (req, res) => {
         whereClause[Op.or] = searchConditions;
       }
 
-      // Log search interaction in background (non-blocking)
       InteractionLog.create({
         user_id: req.user ? req.user.id : null,
         interaction_type: "search",
@@ -195,7 +172,6 @@ exports.browseSongs = async (req, res) => {
       }).catch(err => console.error("[CatalogController] Error logging search:", err));
     }
 
-    // Subquery for likes_count
     const likesCountCol = [
       Sequelize.literal(`(
         SELECT COUNT(*)
@@ -205,24 +181,12 @@ exports.browseSongs = async (req, res) => {
       'likes_count'
     ];
 
-    // Sorting options
-    let order = [["created_at", "DESC"]]; // Default: latest
-    if (sort === "oldest") {
-      order = [["created_at", "ASC"]];
-    } else if (sort === "popular") {
-      order = [["play_count", "DESC"]];
-    } else if (sort === "most_liked") {
-      order = [[Sequelize.literal('likes_count'), 'DESC']];
-    } else if (sort === "alphabetical") {
-      order = [["title", "ASC"]];
-    } else if (sort === "z-a") {
-      order = [["title", "DESC"]];
-    }
-
-    // Pagination limits
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 10;
-    const offset = (pageNum - 1) * limitNum;
+    let order = [["created_at", "DESC"]];
+    if (sort === "oldest") order = [["created_at", "ASC"]];
+    else if (sort === "popular") order = [["play_count", "DESC"]];
+    else if (sort === "most_liked") order = [[Sequelize.literal('likes_count'), 'DESC']];
+    else if (sort === "alphabetical") order = [["title", "ASC"]];
+    else if (sort === "z-a") order = [["title", "DESC"]];
 
     const { count, rows } = await Song.findAndCountAll({
       where: whereClause,
@@ -238,333 +202,61 @@ exports.browseSongs = async (req, res) => {
       ],
       attributes: { include: [likesCountCol] },
       order,
-      limit: limitNum,
-      offset: offset,
+      limit,
+      offset,
       distinct: true
     });
 
-    const totalPages = Math.ceil(count / limitNum);
+    const totalPages = Math.ceil(count / limit);
 
     res.json({ 
       success: true, 
       songs: rows,
       pagination: {
         totalRecords: count,
-        currentPage: pageNum,
+        currentPage: page,
         totalPages,
-        hasNext: pageNum < totalPages,
-        hasPrevious: pageNum > 1
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[browseSongs Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to browse songs." });
   }
 };
 
+/**
+ * Cached Category Listing (5-minute TTL)
+ */
 exports.browseCategories = async (req, res) => {
   try {
-    const categories = await Category.findAll();
+    const cacheKey = "catalog:categories";
+    const cached = cacheService.get(cacheKey);
+    if (cached) {
+      return res.json({ success: true, categories: cached, fromCache: true });
+    }
+
+    const categories = await Category.findAll({ order: [['name', 'ASC']] });
+    cacheService.set(cacheKey, categories, 300, ['categories']);
     res.json({ success: true, categories });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[browseCategories Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to browse categories." });
   }
 };
 
-/** ---------------------------------------------------------------
- * ADMIN/ARTIST ENDPOINTS – guarded by permissionMiddleware
- * --------------------------------------------------------------- */
-exports.createAlbum = async (req, res) => {
-  try {
-    const role = await Role.findByPk(req.user.role_id);
-    let artistProfileId = req.body.artist_profile_id;
-    if (role && role.role_name === 'Artist') {
-      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
-      artistProfileId = profile.artist_profile_id;
-    }
-    const { title, description, release_date, status, scheduled_for } = req.body;
-    let cover_image = req.body.cover_image;
-    if (req.file) {
-      cover_image = mediaService.getFileUrl(req.file.filename);
-    }
-
-    let computedStatus = status || 'draft';
-    if (req.body.is_published !== undefined) computedStatus = req.body.is_published ? 'published' : 'draft';
-
-    const album = await Album.create({ 
-      artist_profile_id: artistProfileId, 
-      title, 
-      description, 
-      cover_image, 
-      release_date,
-      status: computedStatus,
-      scheduled_for: scheduled_for || null
-    });
-    res.status(201).json({ success: true, album });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-exports.updateAlbum = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const album = await Album.findByPk(id);
-    if (!album) return res.status(404).json({ success: false, message: "Album not found" });
-
-    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
-    const role = await Role.findByPk(roleId);
-    if (role && role.role_name === 'Artist') {
-      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile || album.artist_profile_id != profile.artist_profile_id) {
-        return res.status(403).json({ success: false, message: "Forbidden: Cannot modify another artist's album" });
-      }
-    }
-
-    const { title, description, release_date, status, scheduled_for } = req.body;
-    let cover_image = req.body.cover_image;
-    if (req.file) {
-      cover_image = mediaService.getFileUrl(req.file.filename);
-    }
-
-    const updateData = { title, description, release_date };
-    if (status !== undefined) updateData.status = status;
-    if (scheduled_for !== undefined) updateData.scheduled_for = scheduled_for;
-    if (req.body.is_published !== undefined) updateData.status = req.body.is_published ? 'published' : 'draft';
-    if (cover_image !== undefined) {
-      updateData.cover_image = cover_image;
-    }
-
-    const oldCover = album.cover_image;
-    await album.update(updateData);
-    if (updateData.cover_image && updateData.cover_image !== oldCover) {
-      await mediaService.deleteFileByUrl(oldCover);
-    }
-    res.json({ success: true, album });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-exports.deleteAlbum = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const album = await Album.findByPk(id);
-    if (!album) return res.status(404).json({ success: false, message: "Album not found" });
-
-    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
-    const role = await Role.findByPk(roleId);
-    if (role && role.role_name === 'Artist') {
-      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile || album.artist_profile_id != profile.artist_profile_id) {
-        return res.status(403).json({ success: false, message: "Forbidden: Cannot delete another artist's album" });
-      }
-    }
-
-    await album.destroy(); // soft-delete (preserves files for restore)
-    res.json({ success: true, message: "Album soft-deleted successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-exports.createSong = async (req, res) => {
-  try {
-    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
-    const role = await Role.findByPk(roleId);
-    let artistProfileId = req.body.artist_profile_id;
-    if (role && role.role_name === 'Artist') {
-      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
-      artistProfileId = profile.artist_profile_id;
-    }
-    const songData = { ...req.body, artist_profile_id: artistProfileId };
-    if (!songData.status) songData.status = 'draft';
-    if (songData.is_published !== undefined) {
-      songData.status = songData.is_published ? 'published' : 'draft';
-      delete songData.is_published;
-    }
-    
-    // Call model directly
-    const song = await Song.create(songData);
-
-    // Notify all followers
-    if (artistProfileId && songData.status === 'published') {
-      const profile = await ArtistProfile.findByPk(artistProfileId);
-      const followers = await ArtistFollower.findAll({
-        where: { artist_profile_id: artistProfileId }
-      });
-
-      if (followers.length > 0) {
-        const notificationsToCreate = followers.map(f => ({
-          id: "notif_song_" + song.song_id + "_" + f.user_id + "_" + Date.now(),
-          user_id: f.user_id,
-          type: "song",
-          target_id: song.song_id,
-          title: "New Song Uploaded!",
-          message: `${profile?.stage_name || "Followed Artist"} uploaded a new song: "${song.title}"`,
-          timestamp: new Date().toISOString(),
-          read: false,
-          cleared: false
-        }));
-        await Notification.bulkCreate(notificationsToCreate);
-      }
-    }
-
-    res.status(201).json({ success: true, song });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-exports.updateSong = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const song = await Song.findByPk(id);
-    if (!song) return res.status(404).json({ success: false, message: "Song not found" });
-
-    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
-    const role = await Role.findByPk(roleId);
-    if (role && role.role_name === 'Artist') {
-      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile || song.artist_profile_id != profile.artist_profile_id) {
-        return res.status(403).json({ success: false, message: "Forbidden: Cannot modify another artist's song" });
-      }
-    }
-
-    const updateData = { ...req.body };
-    if (updateData.is_published !== undefined) {
-      updateData.status = updateData.is_published ? 'published' : 'draft';
-      delete updateData.is_published;
-    }
-    const oldAudio = song.audio_file;
-    const oldCover = song.cover_image;
-    
-    // Call model directly
-    await song.update(updateData);
-
-    if (updateData.audio_file && updateData.audio_file !== oldAudio) {
-      await mediaService.deleteFileByUrl(oldAudio);
-    }
-    if (updateData.cover_image && updateData.cover_image !== oldCover) {
-      await mediaService.deleteFileByUrl(oldCover);
-    }
-    res.json({ success: true, song });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-exports.deleteSong = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const song = await Song.findByPk(id);
-    if (!song) return res.status(404).json({ success: false, message: "Song not found" });
-
-    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
-    const role = await Role.findByPk(roleId);
-    if (role && role.role_name === 'Artist') {
-      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-      if (!profile || song.artist_profile_id != profile.artist_profile_id) {
-        return res.status(403).json({ success: false, message: "Forbidden: Cannot delete another artist's song" });
-      }
-    }
-
-    await song.destroy(); // soft-delete (preserves files for restore)
-    res.json({ success: true, message: "Song soft-deleted successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// Restore & Deleted Listings Controllers
-exports.restoreDeletedSong = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const song = await Song.findByPk(id, { paranoid: false });
-    if (!song) return res.status(404).json({ success: false, message: "Song not found" });
-
-    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-    if (song.artist_profile_id != profile?.artist_profile_id) {
-      return res.status(403).json({ success: false, message: "Forbidden" });
-    }
-
-    await song.restore();
-    res.json({ success: true, message: "Song restored successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-exports.listDeletedSongs = async (req, res) => {
-  try {
-    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-    if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
-    
-    const songs = await Song.findAll({
-      where: {
-        artist_profile_id: profile.artist_profile_id,
-        deleted_at: { [Op.ne]: null }
-      },
-      paranoid: false
-    });
-    res.json({ success: true, songs });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-exports.restoreDeletedAlbum = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const album = await Album.findByPk(id, { paranoid: false });
-    if (!album) return res.status(404).json({ success: false, message: "Album not found" });
-
-    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-    if (album.artist_profile_id != profile?.artist_profile_id) {
-      return res.status(403).json({ success: false, message: "Forbidden" });
-    }
-
-    await album.restore();
-    res.json({ success: true, message: "Album restored successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-exports.listDeletedAlbums = async (req, res) => {
-  try {
-    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
-    if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
-
-    const albums = await Album.findAll({
-      where: {
-        artist_profile_id: profile.artist_profile_id,
-        deleted_at: { [Op.ne]: null }
-      },
-      paranoid: false
-    });
-    res.json({ success: true, albums });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// Trending Content Aggregation Engine
+/**
+ * Cached Trending Aggregation (60-second TTL to handle heavy traffic)
+ */
 exports.getTrendingContent = async (req, res) => {
   try {
+    const cacheKey = "catalog:trending_content";
+    const cached = cacheService.get(cacheKey);
+    if (cached) {
+      return res.json({ success: true, data: cached, fromCache: true });
+    }
+
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -641,25 +333,329 @@ exports.getTrendingContent = async (req, res) => {
       })
     ]);
 
+    const resultData = {
+      weeklyTrending,
+      monthlyTrending,
+      mostPlayed,
+      mostLiked,
+      recentlyReleased
+    };
+
+    // Cache computed trending aggregate
+    cacheService.set(cacheKey, resultData, 60, ['trending', 'songs']);
+
     res.json({
       success: true,
-      data: {
-        weeklyTrending,
-        monthlyTrending,
-        mostPlayed,
-        mostLiked,
-        recentlyReleased
-      }
+      data: resultData
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[getTrendingContent Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to load trending content." });
   }
 };
 
-// Draft Songs Endpoints
+/** ---------------------------------------------------------------
+ * ADMIN/ARTIST ENDPOINTS – with automatic cache invalidation
+ * --------------------------------------------------------------- */
+exports.createAlbum = async (req, res) => {
+  try {
+    const role = await Role.findByPk(req.user.role_id);
+    let artistProfileId = req.body.artist_profile_id;
+    if (role && role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
+      artistProfileId = profile.artist_profile_id;
+    }
+    const { title, description, release_date, status, scheduled_for } = req.body;
+    let cover_image = req.body.cover_image;
+    if (req.file) {
+      cover_image = mediaService.getFileUrl(req.file.filename);
+    }
 
-/** List Draft Songs for the authenticated artist */
+    let computedStatus = status || 'draft';
+    if (req.body.is_published !== undefined) computedStatus = req.body.is_published ? 'published' : 'draft';
+
+    const album = await Album.create({ 
+      artist_profile_id: artistProfileId, 
+      title, 
+      description, 
+      cover_image, 
+      release_date,
+      status: computedStatus,
+      scheduled_for: scheduled_for || null
+    });
+
+    cacheService.invalidateTag('albums');
+    res.status(201).json({ success: true, album });
+  } catch (err) {
+    console.error("[createAlbum Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to create album." });
+  }
+};
+
+exports.updateAlbum = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const album = await Album.findByPk(id);
+    if (!album) return res.status(404).json({ success: false, message: "Album not found" });
+
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    if (role && role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile || album.artist_profile_id != profile.artist_profile_id) {
+        return res.status(403).json({ success: false, message: "Forbidden: Cannot modify another artist's album" });
+      }
+    }
+
+    const { title, description, release_date, status, scheduled_for } = req.body;
+    let cover_image = req.body.cover_image;
+    if (req.file) {
+      cover_image = mediaService.getFileUrl(req.file.filename);
+    }
+
+    const updateData = { title, description, release_date };
+    if (status !== undefined) updateData.status = status;
+    if (scheduled_for !== undefined) updateData.scheduled_for = scheduled_for;
+    if (req.body.is_published !== undefined) updateData.status = req.body.is_published ? 'published' : 'draft';
+    if (cover_image !== undefined) updateData.cover_image = cover_image;
+
+    const oldCover = album.cover_image;
+    await album.update(updateData);
+    if (updateData.cover_image && updateData.cover_image !== oldCover) {
+      await mediaService.deleteFileByUrl(oldCover);
+    }
+
+    cacheService.invalidateTag('albums');
+    res.json({ success: true, album });
+  } catch (err) {
+    console.error("[updateAlbum Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update album." });
+  }
+};
+
+exports.deleteAlbum = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const album = await Album.findByPk(id);
+    if (!album) return res.status(404).json({ success: false, message: "Album not found" });
+
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    if (role && role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile || album.artist_profile_id != profile.artist_profile_id) {
+        return res.status(403).json({ success: false, message: "Forbidden: Cannot delete another artist's album" });
+      }
+    }
+
+    await album.destroy();
+    cacheService.invalidateTag('albums');
+    res.json({ success: true, message: "Album soft-deleted successfully" });
+  } catch (err) {
+    console.error("[deleteAlbum Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete album." });
+  }
+};
+
+exports.createSong = async (req, res) => {
+  try {
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    let artistProfileId = req.body.artist_profile_id;
+    if (role && role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
+      artistProfileId = profile.artist_profile_id;
+    }
+    const songData = { ...req.body, artist_profile_id: artistProfileId };
+    if (!songData.status) songData.status = 'draft';
+    if (songData.is_published !== undefined) {
+      songData.status = songData.is_published ? 'published' : 'draft';
+      delete songData.is_published;
+    }
+    
+    const song = await Song.create(songData);
+
+    // Invalidate caches
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
+
+    // Notify followers
+    if (artistProfileId && songData.status === 'published') {
+      const profile = await ArtistProfile.findByPk(artistProfileId);
+      const followers = await ArtistFollower.findAll({
+        where: { artist_profile_id: artistProfileId }
+      });
+
+      if (followers.length > 0) {
+        const notificationsToCreate = followers.map(f => ({
+          id: "notif_song_" + song.song_id + "_" + f.user_id + "_" + Date.now(),
+          user_id: f.user_id,
+          type: "song",
+          target_id: song.song_id,
+          title: "New Song Uploaded!",
+          message: `${profile?.stage_name || "Followed Artist"} uploaded a new song: "${song.title}"`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          cleared: false
+        }));
+        await Notification.bulkCreate(notificationsToCreate);
+      }
+    }
+
+    res.status(201).json({ success: true, song });
+  } catch (err) {
+    console.error("[createSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to create song." });
+  }
+};
+
+exports.updateSong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const song = await Song.findByPk(id);
+    if (!song) return res.status(404).json({ success: false, message: "Song not found" });
+
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    if (role && role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile || song.artist_profile_id != profile.artist_profile_id) {
+        return res.status(403).json({ success: false, message: "Forbidden: Cannot modify another artist's song" });
+      }
+    }
+
+    const updateData = { ...req.body };
+    if (updateData.is_published !== undefined) {
+      updateData.status = updateData.is_published ? 'published' : 'draft';
+      delete updateData.is_published;
+    }
+    const oldAudio = song.audio_file;
+    const oldCover = song.cover_image;
+    
+    await song.update(updateData);
+
+    if (updateData.audio_file && updateData.audio_file !== oldAudio) {
+      await mediaService.deleteFileByUrl(oldAudio);
+    }
+    if (updateData.cover_image && updateData.cover_image !== oldCover) {
+      await mediaService.deleteFileByUrl(oldCover);
+    }
+
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
+    res.json({ success: true, song });
+  } catch (err) {
+    console.error("[updateSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update song." });
+  }
+};
+
+exports.deleteSong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const song = await Song.findByPk(id);
+    if (!song) return res.status(404).json({ success: false, message: "Song not found" });
+
+    const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
+    const role = await Role.findByPk(roleId);
+    if (role && role.role_name === 'Artist') {
+      const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+      if (!profile || song.artist_profile_id != profile.artist_profile_id) {
+        return res.status(403).json({ success: false, message: "Forbidden: Cannot delete another artist's song" });
+      }
+    }
+
+    await song.destroy();
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
+    res.json({ success: true, message: "Song soft-deleted successfully" });
+  } catch (err) {
+    console.error("[deleteSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete song." });
+  }
+};
+
+exports.restoreDeletedSong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const song = await Song.findByPk(id, { paranoid: false });
+    if (!song) return res.status(404).json({ success: false, message: "Song not found" });
+
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (song.artist_profile_id != profile?.artist_profile_id) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    await song.restore();
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
+    res.json({ success: true, message: "Song restored successfully" });
+  } catch (err) {
+    console.error("[restoreDeletedSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to restore song." });
+  }
+};
+
+exports.listDeletedSongs = async (req, res) => {
+  try {
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
+    
+    const songs = await Song.findAll({
+      where: {
+        artist_profile_id: profile.artist_profile_id,
+        deleted_at: { [Op.ne]: null }
+      },
+      paranoid: false
+    });
+    res.json({ success: true, songs });
+  } catch (err) {
+    console.error("[listDeletedSongs Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to list deleted songs." });
+  }
+};
+
+exports.restoreDeletedAlbum = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const album = await Album.findByPk(id, { paranoid: false });
+    if (!album) return res.status(404).json({ success: false, message: "Album not found" });
+
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (album.artist_profile_id != profile?.artist_profile_id) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    await album.restore();
+    cacheService.invalidateTag('albums');
+    res.json({ success: true, message: "Album restored successfully" });
+  } catch (err) {
+    console.error("[restoreDeletedAlbum Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to restore album." });
+  }
+};
+
+exports.listDeletedAlbums = async (req, res) => {
+  try {
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
+
+    const albums = await Album.findAll({
+      where: {
+        artist_profile_id: profile.artist_profile_id,
+        deleted_at: { [Op.ne]: null }
+      },
+      paranoid: false
+    });
+    res.json({ success: true, albums });
+  } catch (err) {
+    console.error("[listDeletedAlbums Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to list deleted albums." });
+  }
+};
+
 exports.listDraftSongs = async (req, res) => {
   try {
     const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
@@ -673,12 +669,11 @@ exports.listDraftSongs = async (req, res) => {
     const drafts = await Song.findAll({ where: whereClause, include: [{ model: Album, attributes: ['title'] }, { model: Category, attributes: ['name'] }] });
     res.json({ success: true, drafts });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[listDraftSongs Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to list draft songs." });
   }
 };
 
-/** Create a draft song */
 exports.createDraftSong = async (req, res) => {
   try {
     const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
@@ -693,12 +688,11 @@ exports.createDraftSong = async (req, res) => {
     const song = await Song.create(songData);
     res.status(201).json({ success: true, song });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[createDraftSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to create draft song." });
   }
 };
 
-/** Update a draft song */
 exports.updateDraftSong = async (req, res) => {
   try {
     const { id } = req.params;
@@ -717,12 +711,11 @@ exports.updateDraftSong = async (req, res) => {
     await song.update(updateData);
     res.json({ success: true, song });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[updateDraftSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update draft song." });
   }
 };
 
-/** Delete a draft song */
 exports.deleteDraftSong = async (req, res) => {
   try {
     const { id } = req.params;
@@ -737,15 +730,14 @@ exports.deleteDraftSong = async (req, res) => {
         return res.status(403).json({ success: false, message: "Forbidden: Cannot delete another artist's draft song" });
       }
     }
-    await song.destroy(); // soft-delete
+    await song.destroy();
     res.json({ success: true, message: 'Draft song soft-deleted' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[deleteDraftSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete draft song." });
   }
 };
 
-/** Publish a draft song */
 exports.publishDraftSong = async (req, res) => {
   try {
     const { id } = req.params;
@@ -761,20 +753,23 @@ exports.publishDraftSong = async (req, res) => {
       }
     }
     await song.update({ status: 'published', scheduled_for: null });
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
     res.json({ success: true, song });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[publishDraftSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to publish draft song." });
   }
 };
 
 exports.createCategory = async (req, res) => {
   try {
     const category = await Category.create(req.body);
+    cacheService.invalidateTag('categories');
     res.status(201).json({ success: true, category });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[createCategory Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to create category." });
   }
 };
 
@@ -784,10 +779,11 @@ exports.updateCategory = async (req, res) => {
     const [rows] = await Category.update(req.body, { where: { category_id: id } });
     if (rows === 0) return res.status(404).json({ success: false, message: "Category not found" });
     const category = await Category.findByPk(id);
+    cacheService.invalidateTag('categories');
     res.json({ success: true, category });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[updateCategory Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update category." });
   }
 };
 
@@ -796,10 +792,11 @@ exports.deleteCategory = async (req, res) => {
     const { id } = req.params;
     const rows = await Category.destroy({ where: { category_id: id } });
     if (!rows) return res.status(404).json({ success: false, message: "Category not found" });
+    cacheService.invalidateTag('categories');
     res.json({ success: true, message: "Category deleted" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[deleteCategory Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete category." });
   }
 };
 
@@ -812,7 +809,8 @@ exports.getFeedbacks = async (req, res) => {
           paranoid: false,
           attributes: ["title", "cover_image"]
         }
-      ]
+      ],
+      limit: 100
     });
     const formatted = feedbacks.map(f => {
       const json = f.toJSON();
@@ -821,14 +819,16 @@ exports.getFeedbacks = async (req, res) => {
     });
     res.json({ success: true, feedbacks: formatted });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[getFeedbacks Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to retrieve feedbacks." });
   }
 };
 
 exports.submitFeedback = async (req, res) => {
   try {
     const { id, song_id, rating, comment } = req.body;
+    if (!song_id) return res.status(400).json({ success: false, message: "song_id is required" });
+
     const user = await User.findByPk(req.user.id);
     const username = user ? user.username : "Anonymous Listener";
     
@@ -837,8 +837,8 @@ exports.submitFeedback = async (req, res) => {
       song_id,
       user_id: req.user.id,
       username,
-      rating,
-      comment,
+      rating: rating || 5,
+      comment: comment || "",
       timestamp: new Date().toISOString(),
       edited: false,
       likes: 0,
@@ -851,8 +851,8 @@ exports.submitFeedback = async (req, res) => {
 
     res.status(201).json({ success: true, feedback: formatted });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[submitFeedback Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to submit feedback." });
   }
 };
 
@@ -879,8 +879,8 @@ exports.updateFeedback = async (req, res) => {
 
     res.json({ success: true, feedback: formatted });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[updateFeedback Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update feedback." });
   }
 };
 
@@ -897,8 +897,8 @@ exports.deleteFeedback = async (req, res) => {
     await feedback.destroy();
     res.json({ success: true, message: "Feedback deleted" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[deleteFeedback Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete feedback." });
   }
 };
 
@@ -924,19 +924,17 @@ exports.toggleLikeFeedback = async (req, res) => {
 
     res.json({ success: true, likes: feedback.likes, likedBy });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[toggleLikeFeedback Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to toggle feedback like." });
   }
 };
 
 module.exports = {
-  // public
   browseArtists: exports.browseArtists,
   browseAlbums: exports.browseAlbums,
   browseSongs: exports.browseSongs,
   browseCategories: exports.browseCategories,
   getTrendingContent: exports.getTrendingContent,
-  // admin
   createAlbum: exports.createAlbum,
   updateAlbum: exports.updateAlbum,
   deleteAlbum: exports.deleteAlbum,
@@ -950,13 +948,11 @@ module.exports = {
   createCategory: exports.createCategory,
   updateCategory: exports.updateCategory,
   deleteCategory: exports.deleteCategory,
-  // feedback
   getFeedbacks: exports.getFeedbacks,
   submitFeedback: exports.submitFeedback,
   updateFeedback: exports.updateFeedback,
   deleteFeedback: exports.deleteFeedback,
   toggleLikeFeedback: exports.toggleLikeFeedback,
-  // Draft song endpoints
   listDraftSongs: exports.listDraftSongs,
   createDraftSong: exports.createDraftSong,
   updateDraftSong: exports.updateDraftSong,
