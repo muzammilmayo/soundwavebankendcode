@@ -1,7 +1,7 @@
 // superadminController.js
 const UserModel = require("../models/userModel");
 const bcrypt = require("bcryptjs");
-
+const { sendWelcomeEmail } = require("../utils/mailer");
 exports.getDashboard = (req, res) => {
   res.json({
     success: true,
@@ -193,6 +193,9 @@ exports.createAdmin = async (req, res) => {
       role_id: 2, // Admin role
     });
 
+    // Send welcome email to the new admin
+    await sendWelcomeEmail(email, username, password);
+
     res.status(201).json({
       success: true,
       message: "Admin account created successfully",
@@ -226,11 +229,12 @@ exports.deleteUser = async (req, res) => {
       });
     }
 
-    await UserModel.deleteById(id);
+    // Soft delete: mark user as Inactive instead of removing from DB
+    await UserModel.updateStatus(id, 'Inactive');
 
     res.json({
       success: true,
-      message: `User "${user.username}" has been permanently deleted`,
+      message: `User "${user.username}" has been deactivated (soft deleted)`,
     });
   } catch (error) {
     console.error("Error deleting user:", error);

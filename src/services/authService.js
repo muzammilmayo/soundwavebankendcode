@@ -3,7 +3,8 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 
 const UserModel = require("../models/userModel");
-const sendResetEmail = require("../utils/mailer");
+
+const { sendResetEmail } = require("../utils/mailer");
 
 const AuthService = {
   register: async ({ username, email, password, role_id }) => {
@@ -48,6 +49,11 @@ const AuthService = {
       { expiresIn: "24h" }
     );
 
+    const { ArtistModerator } = require("../models");
+    const activeMod = await ArtistModerator.findOne({
+      where: { user_id: user.user_id, status: 'active' }
+    });
+
     return {
       token,
       user: {
@@ -55,6 +61,8 @@ const AuthService = {
         username: user.username,
         email: user.email,
         role: user.role_name,
+        is_artist_moderator: !!activeMod,
+        moderated_artist_id: activeMod ? activeMod.artist_id : null
       },
     };
   },
@@ -81,7 +89,16 @@ const AuthService = {
   },
 
   forgotPassword: async (email) => {
-    const user = await UserModel.findByEmail(email);
+    // Attempt to find the user; if DB fails, log and exit gracefully
+    let user;
+    try {
+      user = await UserModel.findByEmail(email);
+    } catch (err) {
+      console.warn("DB error during forgotPassword (findByEmail):", err.message);
+      const error = new Error("Failed to process request.");
+      error.statusCode = 500;
+      throw error;
+    }
 
     if (!user) {
       const error = new Error("Email not found");
@@ -92,21 +109,27 @@ const AuthService = {
     const token = crypto.randomBytes(32).toString("hex");
     const expiry = new Date(Date.now() + 15 * 60 * 1000);
 
-    await UserModel.setResetToken(email, token, expiry);
+    // Store reset token; if DB fails, log and continue
+    try {
+      await UserModel.setResetToken(email, token, expiry);
+    } catch (err) {
+      console.warn("Failed to store reset token:", err.message);
+    }
 
-    const resetLink = `${process.env.CLIENT_URL}/reset-password/${token}`;
+    const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+    const resetLink = `${clientUrl}/reset-password/${token}`;
+    // send email – errors already handled inside mailer
     await sendResetEmail(email, resetLink);
   },
 
+  // Reset password using a valid reset token
   resetPassword: async ({ token, newPassword }) => {
     const user = await UserModel.findByValidResetToken(token);
-
     if (!user) {
-      const error = new Error("Invalid or Expired Reset Link");
+      const error = new Error('Invalid or Expired Reset Link');
       error.statusCode = 400;
       throw error;
     }
-
     const hashPassword = await bcrypt.hash(newPassword, 10);
     await UserModel.resetPasswordByToken(token, hashPassword);
   },

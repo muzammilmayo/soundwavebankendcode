@@ -1,13 +1,25 @@
-'use strict';
-module.exports = {
-  up: async (queryInterface, Sequelize) => {
-    await queryInterface.addColumn('users', 'phone', {
-      type: Sequelize.STRING(20),
-      allowNull: true,
+/**
+ * @param { import("knex").Knex } knex
+ * @returns { Promise<void> }
+ */
+exports.up = async function (knex) {
+  const hasColumn = await knex.schema.hasColumn("users", "phone");
+  if (!hasColumn) {
+    await knex.schema.table("users", function (table) {
+      table.string("phone", 20).nullable();
     });
-  },
+  }
+};
 
-  down: async (queryInterface, Sequelize) => {
-    await queryInterface.removeColumn('users', 'phone');
-  },
+/**
+ * @param { import("knex").Knex } knex
+ * @returns { Promise<void> }
+ */
+exports.down = async function (knex) {
+  const hasColumn = await knex.schema.hasColumn("users", "phone");
+  if (hasColumn) {
+    await knex.schema.table("users", function (table) {
+      table.dropColumn("phone");
+    });
+  }
 };

@@ -12,25 +12,65 @@ const {
 
 const verifyToken = require("../middleware/authMiddleware");
 const userController = require("../controllers/userController");
+const { authLimiter } = require("../middleware/rateLimiter");
+const RequestValidator = require("../validators");
 
 // =========================
-// Public Routes
+// Public Auth Routes (Hardened with rate limiting & schema validation)
 // =========================
 
 // Register
-router.post("/register", register);
+router.post(
+  "/register", 
+  authLimiter, 
+  RequestValidator.validateRegister(), 
+  register
+);
 
 // Login
-router.post("/login", login);
+router.post(
+  "/login", 
+  authLimiter, 
+  RequestValidator.validateLogin(), 
+  login
+);
 
 // Forgot Password
-router.post("/forgot-password", forgotPassword);
+router.post(
+  "/forgot-password", 
+  authLimiter, 
+  RequestValidator.validateForgotPassword(), 
+  forgotPassword
+);
 
 // Reset Password
-router.put("/reset-password/:token", resetPassword);
+router.put(
+  "/reset-password/:token", 
+  authLimiter, 
+  RequestValidator.validateResetPassword(), 
+  resetPassword
+);
+router.put(
+  "/reset-password", 
+  authLimiter, 
+  RequestValidator.validateResetPassword(), 
+  resetPassword
+);
+router.post(
+  "/reset-password/:token", 
+  authLimiter, 
+  RequestValidator.validateResetPassword(), 
+  resetPassword
+);
+router.post(
+  "/reset-password", 
+  authLimiter, 
+  RequestValidator.validateResetPassword(), 
+  resetPassword
+);
 
 // =========================
-// Protected Routes
+// Protected User Routes
 // =========================
 
 // Profile
@@ -38,7 +78,7 @@ router.get("/profile", verifyToken, userController.getProfile);
 router.put("/profile", verifyToken, userController.updateProfile);
 
 // Change Password
-router.put("/change-password", verifyToken, changePassword);
+router.put("/change-password", verifyToken, authLimiter, changePassword);
 
 // Logout
 router.post("/logout", verifyToken, logout);

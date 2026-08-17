@@ -3,6 +3,7 @@ const AuthService = require("../services/authService");
 // =========================
 // Register
 // =========================
+
 exports.register = async (req, res) => {
   console.log("BODY:", req.body);
 
@@ -14,9 +15,6 @@ exports.register = async (req, res) => {
       message: "All fields are required",
     });
   }
-
- 
-
 
   try {
     await AuthService.register({ username, email, password, role_id });
@@ -42,7 +40,14 @@ exports.login = async (req, res) => {
 
   try {
     const { token, user } = await AuthService.login({ email, password });
-
+    // Store the token for revocation
+    
+    // Set HttpOnly cookie for authentication
+    res.cookie('auth_token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+    });
     res.status(200).json({
       success: true,
       message: "Login Successful",
@@ -98,7 +103,7 @@ exports.forgotPassword = async (req, res) => {
     console.log(error);
     res.status(error.statusCode || 500).json({
       success: false,
-      message: error.statusCode ? error.message : "Failed to send email.",
+      message: error.message || "Failed to send email.",
     });
   }
 };
@@ -107,12 +112,18 @@ exports.forgotPassword = async (req, res) => {
 // Reset Password
 // =========================
 exports.resetPassword = async (req, res) => {
-  const { token } = req.params;
+  const token = req.params.token || req.body.token;
   const { newPassword } = req.body;
+
+  if (!token) {
+    return res.status(400).json({
+      success: false,
+      message: "Reset token is required (provide it in URL or request body).",
+    });
+  }
 
   try {
     await AuthService.resetPassword({ token, newPassword });
-
     res.json({
       success: true,
       message: "Password Reset Successfully",
@@ -130,6 +141,8 @@ exports.resetPassword = async (req, res) => {
 // Logout
 // =========================
 exports.logout = (req, res) => {
+  // Clear the authentication cookie
+  res.clearCookie('auth_token');
   res.status(200).json({
     success: true,
     message: "Logout Successfully",
