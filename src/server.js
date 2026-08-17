@@ -29,9 +29,9 @@ app.use("/api/albums", require("./routes/albumRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/artist", require("./routes/artistRoutes"));
-app.use("/api/moderator", require("./routes/moderatorRoutes"));
 app.use("/api/listener", require("./routes/listenerRoutes"));
 app.use("/api/superadmin", require("./routes/superadminRoutes"));
+app.use("/api/reports", require("./routes/reportRoutes"));
 
 // Serve uploaded media files
 const path = require('path');

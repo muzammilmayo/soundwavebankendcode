@@ -1,0 +1,116 @@
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785854920,"exp":1785941320,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785854920,"exp":1785941320,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785854920,"exp":1785941320,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785854920,"exp":1785941320,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785854920,"exp":1785941320,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785854920,"exp":1785941320,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":85,"role_id":5,"iat":1785854962,"exp":1785941362,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtistModerator":true,"moderatedArtistUserId":90}
+[checkArtistOrAdmin] resolved roleId: 5
+[checkArtistOrAdmin] resolved role name: Listener
+[checkArtistOrAdmin] User is active artist moderator. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":85,"role_id":5,"iat":1785854962,"exp":1785941362,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtistModerator":true,"moderatedArtistUserId":90}
+[checkArtistOrAdmin] resolved roleId: 5
+[checkArtistOrAdmin] resolved role name: Listener
+[checkArtistOrAdmin] User is active artist moderator. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":85,"role_id":5,"iat":1785854962,"exp":1785941362,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtistModerator":true,"moderatedArtistUserId":90}
+[checkArtistOrAdmin] resolved roleId: 5
+[checkArtistOrAdmin] resolved role name: Listener
+[checkArtistOrAdmin] User is active artist moderator. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":85,"role_id":5,"iat":1785854962,"exp":1785941362,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtistModerator":true,"moderatedArtistUserId":90}
+[checkArtistOrAdmin] resolved roleId: 5
+[checkArtistOrAdmin] resolved role name: Listener
+[checkArtistOrAdmin] User is active artist moderator. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855645,"exp":1785942045,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855645,"exp":1785942045,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855645,"exp":1785942045,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855645,"exp":1785942045,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855645,"exp":1785942045,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855645,"exp":1785942045,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855645,"exp":1785942045,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":85,"role_id":5,"iat":1785855815,"exp":1785942215,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtistModerator":true,"moderatedArtistUserId":90}
+[checkArtistOrAdmin] resolved roleId: 5
+[checkArtistOrAdmin] resolved role name: Listener
+[checkArtistOrAdmin] User is active artist moderator. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.
+[checkArtistOrAdmin] Incoming request for /albums. User: {"id":90,"role_id":3,"iat":1785855943,"exp":1785942343,"artistProfileId":16,"artistProfile":{"artist_profile_id":16,"user_id":90,"stage_name":"Muzammil","bio":"Singer","profile_image":"http://localhost:5000/uploads/1784062859760-9776716.jpg","cover_image":"https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f","facebook":"","instagram":"","youtube":"","spotify":"","is_verified":true,"created_at":"2026-07-10T18:54:28.000Z","updated_at":"2026-07-14T21:00:59.000Z"},"isArtist":true}
+[checkArtistOrAdmin] resolved roleId: 3
+[checkArtistOrAdmin] resolved role name: Artist
+[checkArtistOrAdmin] Role matched Artist/Admin. Allowing.

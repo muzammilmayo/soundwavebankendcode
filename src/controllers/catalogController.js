@@ -1,7 +1,7 @@
 // backend/src/controllers/catalogController.js
 
-const { ArtistProfile, Album, Song, Category, User, Role, Feedback, ArtistFollower, Notification } = require("../models");
-const { Op } = require("sequelize");
+const { ArtistProfile, Album, Song, Category, User, Role, Feedback, ArtistFollower, Notification, InteractionLog } = require("../models");
+const { Op, Sequelize } = require("sequelize");
 const mediaService = require("../services/mediaService");
 
 /** ---------------------------------------------------------------
@@ -9,7 +9,7 @@ const mediaService = require("../services/mediaService");
  * --------------------------------------------------------------- */
 exports.browseArtists = async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, page, limit } = req.query;
     const whereClause = {};
     if (search) {
       whereClause[Op.or] = [
@@ -17,12 +17,34 @@ exports.browseArtists = async (req, res) => {
         { bio: { [Op.like]: `%${search}%` } }
       ];
     }
-    const artists = await ArtistProfile.findAll({
+    
+    // Pagination
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const offset = (pageNum - 1) * limitNum;
+
+    const { count, rows } = await ArtistProfile.findAndCountAll({
       where: whereClause,
       attributes: { exclude: ["created_at", "updated_at"] },
       include: [{ model: User, attributes: ["username", "email"], where: { status: "Active" } }],
+      limit: limitNum,
+      offset: offset,
+      distinct: true
     });
-    res.json({ success: true, artists });
+
+    const totalPages = Math.ceil(count / limitNum);
+
+    res.json({ 
+      success: true, 
+      artists: rows,
+      pagination: {
+        totalRecords: count,
+        currentPage: pageNum,
+        totalPages,
+        hasNext: pageNum < totalPages,
+        hasPrevious: pageNum > 1
+      }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -31,7 +53,7 @@ exports.browseArtists = async (req, res) => {
 
 exports.browseAlbums = async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, page, limit } = req.query;
     const whereClause = { status: 'published' };
     if (search) {
       whereClause[Op.or] = [
@@ -39,7 +61,13 @@ exports.browseAlbums = async (req, res) => {
         { "$ArtistProfile.stage_name$": { [Op.like]: `%${search}%` } }
       ];
     }
-    const albums = await Album.findAll({
+
+    // Pagination
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const offset = (pageNum - 1) * limitNum;
+
+    const { count, rows } = await Album.findAndCountAll({
       where: whereClause,
       include: [
         { 
@@ -48,8 +76,24 @@ exports.browseAlbums = async (req, res) => {
           include: [{ model: User, attributes: [], where: { status: "Active" } }]
         }
       ],
+      limit: limitNum,
+      offset: offset,
+      distinct: true
     });
-    res.json({ success: true, albums });
+
+    const totalPages = Math.ceil(count / limitNum);
+
+    res.json({ 
+      success: true, 
+      albums: rows,
+      pagination: {
+        totalRecords: count,
+        currentPage: pageNum,
+        totalPages,
+        hasNext: pageNum < totalPages,
+        hasPrevious: pageNum > 1
+      }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -58,21 +102,90 @@ exports.browseAlbums = async (req, res) => {
 
 exports.browseSongs = async (req, res) => {
   try {
-    const { search, category } = req.query;
-    const whereClause = { status: 'published' };
+    const { search, category, artist, album, year, duration, status, sort, page, limit } = req.query;
+    const whereClause = {};
 
+    // Lifecycle/status filtering: Listeners can only see published, Admin/Mod/Artist own see others
+    let allowedStatuses = ['published'];
+    if (req.user) {
+      const user = await User.findByPk(req.user.id);
+      const role = await Role.findByPk(user?.role_id);
+      if (role && (role.role_name === 'Admin' || role.role_name === 'Super Admin' || role.role_name === 'Moderator')) {
+        allowedStatuses = ['draft', 'pending_review', 'scheduled', 'published', 'archived'];
+      } else if (role && role.role_name === 'Artist') {
+        const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+        if (profile) {
+          whereClause[Op.or] = [
+            { status: 'published' },
+            { artist_profile_id: profile.artist_profile_id }
+          ];
+        }
+      }
+    }
+
+    if (!whereClause[Op.or]) {
+      if (status && allowedStatuses.includes(status)) {
+        whereClause.status = status;
+      } else {
+        whereClause.status = allowedStatuses;
+      }
+    }
+
+    // Genre (category) filter
     if (category) {
       whereClause.category_id = category;
     }
 
+    // Artist filter
+    if (artist) {
+      whereClause.artist_profile_id = artist;
+    }
+
+    // Album filter
+    if (album) {
+      whereClause.album_id = album;
+    }
+
+    // Release Year filter
+    if (year) {
+      whereClause.release_date = Sequelize.where(
+        Sequelize.fn('YEAR', Sequelize.col('Song.release_date')),
+        year
+      );
+    }
+
+    // Duration filter
+    if (duration) {
+      if (duration === "short") {
+        whereClause.duration = { [Op.lt]: 180 }; // < 3 minutes
+      } else if (duration === "medium") {
+        whereClause.duration = { [Op.between]: [180, 300] }; // 3-5 minutes
+      } else if (duration === "long") {
+        whereClause.duration = { [Op.gt]: 300 }; // > 5 minutes
+      }
+    }
+
+    // Advanced Multi-Field Search (includes tags)
     if (search) {
-      whereClause[Op.or] = [
+      const searchConditions = [
         { title: { [Op.like]: `%${search}%` } },
-        { "$ArtistProfile.stage_name$": { [Op.like]: `%${search}%` } }
+        { tags: { [Op.like]: `%${search}%` } },
+        { '$ArtistProfile.stage_name$': { [Op.like]: `%${search}%` } },
+        { '$Album.title$': { [Op.like]: `%${search}%` } },
+        { '$Category.name$': { [Op.like]: `%${search}%` } }
       ];
+      if (whereClause[Op.or]) {
+        // Compound condition for Artist own tracks + search filter
+        whereClause[Op.and] = [
+          { [Op.or]: whereClause[Op.or] },
+          { [Op.or]: searchConditions }
+        ];
+        delete whereClause[Op.or];
+      } else {
+        whereClause[Op.or] = searchConditions;
+      }
 
       // Log search interaction in background (non-blocking)
-      const { InteractionLog } = require('../models');
       InteractionLog.create({
         user_id: req.user ? req.user.id : null,
         interaction_type: "search",
@@ -82,8 +195,38 @@ exports.browseSongs = async (req, res) => {
       }).catch(err => console.error("[CatalogController] Error logging search:", err));
     }
 
-    const songs = await Song.findAll({
+    // Subquery for likes_count
+    const likesCountCol = [
+      Sequelize.literal(`(
+        SELECT COUNT(*)
+        FROM song_likes AS likes
+        WHERE likes.song_id = Song.song_id
+      )`),
+      'likes_count'
+    ];
+
+    // Sorting options
+    let order = [["created_at", "DESC"]]; // Default: latest
+    if (sort === "oldest") {
+      order = [["created_at", "ASC"]];
+    } else if (sort === "popular") {
+      order = [["play_count", "DESC"]];
+    } else if (sort === "most_liked") {
+      order = [[Sequelize.literal('likes_count'), 'DESC']];
+    } else if (sort === "alphabetical") {
+      order = [["title", "ASC"]];
+    } else if (sort === "z-a") {
+      order = [["title", "DESC"]];
+    }
+
+    // Pagination limits
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const offset = (pageNum - 1) * limitNum;
+
+    const { count, rows } = await Song.findAndCountAll({
       where: whereClause,
+      paranoid: false,
       include: [
         { 
           model: ArtistProfile, 
@@ -93,8 +236,26 @@ exports.browseSongs = async (req, res) => {
         { model: Album, attributes: ["title"] },
         { model: Category, attributes: ["name"] },
       ],
+      attributes: { include: [likesCountCol] },
+      order,
+      limit: limitNum,
+      offset: offset,
+      distinct: true
     });
-    res.json({ success: true, songs });
+
+    const totalPages = Math.ceil(count / limitNum);
+
+    res.json({ 
+      success: true, 
+      songs: rows,
+      pagination: {
+        totalRecords: count,
+        currentPage: pageNum,
+        totalPages,
+        hasNext: pageNum < totalPages,
+        hasPrevious: pageNum > 1
+      }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -204,12 +365,8 @@ exports.deleteAlbum = async (req, res) => {
       }
     }
 
-    const coverImage = album.cover_image;
-    await album.destroy();
-    if (coverImage) {
-      await mediaService.deleteFileByUrl(coverImage);
-    }
-    res.json({ success: true, message: "Album deleted" });
+    await album.destroy(); // soft-delete (preserves files for restore)
+    res.json({ success: true, message: "Album soft-deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -232,10 +389,12 @@ exports.createSong = async (req, res) => {
       songData.status = songData.is_published ? 'published' : 'draft';
       delete songData.is_published;
     }
+    
+    // Call model directly
     const song = await Song.create(songData);
 
     // Notify all followers
-    if (artistProfileId) {
+    if (artistProfileId && songData.status === 'published') {
       const profile = await ArtistProfile.findByPk(artistProfileId);
       const followers = await ArtistFollower.findAll({
         where: { artist_profile_id: artistProfileId }
@@ -286,7 +445,10 @@ exports.updateSong = async (req, res) => {
     }
     const oldAudio = song.audio_file;
     const oldCover = song.cover_image;
+    
+    // Call model directly
     await song.update(updateData);
+
     if (updateData.audio_file && updateData.audio_file !== oldAudio) {
       await mediaService.deleteFileByUrl(oldAudio);
     }
@@ -315,16 +477,180 @@ exports.deleteSong = async (req, res) => {
       }
     }
 
-    const audioFile = song.audio_file;
-    const coverImage = song.cover_image;
-    await song.destroy();
-    if (audioFile) {
-      await mediaService.deleteFileByUrl(audioFile);
+    await song.destroy(); // soft-delete (preserves files for restore)
+    res.json({ success: true, message: "Song soft-deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Restore & Deleted Listings Controllers
+exports.restoreDeletedSong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const song = await Song.findByPk(id, { paranoid: false });
+    if (!song) return res.status(404).json({ success: false, message: "Song not found" });
+
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (song.artist_profile_id != profile?.artist_profile_id) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
     }
-    if (coverImage) {
-      await mediaService.deleteFileByUrl(coverImage);
+
+    await song.restore();
+    res.json({ success: true, message: "Song restored successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.listDeletedSongs = async (req, res) => {
+  try {
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
+    
+    const songs = await Song.findAll({
+      where: {
+        artist_profile_id: profile.artist_profile_id,
+        deleted_at: { [Op.ne]: null }
+      },
+      paranoid: false
+    });
+    res.json({ success: true, songs });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.restoreDeletedAlbum = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const album = await Album.findByPk(id, { paranoid: false });
+    if (!album) return res.status(404).json({ success: false, message: "Album not found" });
+
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (album.artist_profile_id != profile?.artist_profile_id) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
     }
-    res.json({ success: true, message: "Song deleted" });
+
+    await album.restore();
+    res.json({ success: true, message: "Album restored successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.listDeletedAlbums = async (req, res) => {
+  try {
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
+
+    const albums = await Album.findAll({
+      where: {
+        artist_profile_id: profile.artist_profile_id,
+        deleted_at: { [Op.ne]: null }
+      },
+      paranoid: false
+    });
+    res.json({ success: true, albums });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Trending Content Aggregation Engine
+exports.getTrendingContent = async (req, res) => {
+  try {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const getTrendingIds = async (sinceDate) => {
+      const logs = await InteractionLog.findAll({
+        attributes: [
+          'target_id',
+          [Sequelize.fn('COUNT', Sequelize.col('id')), 'interaction_count']
+        ],
+        where: {
+          interaction_type: ['play', 'like'],
+          target_type: 'song',
+          created_at: { [Op.gte]: sinceDate }
+        },
+        group: ['target_id'],
+        order: [[Sequelize.literal('interaction_count'), 'DESC']],
+        limit: 10
+      });
+      return logs.map(l => parseInt(l.target_id, 10)).filter(id => !isNaN(id));
+    };
+
+    const [weeklyIds, monthlyIds] = await Promise.all([
+      getTrendingIds(sevenDaysAgo),
+      getTrendingIds(thirtyDaysAgo)
+    ]);
+
+    const likesCountCol = [
+      Sequelize.literal(`(
+        SELECT COUNT(*)
+        FROM song_likes AS likes
+        WHERE likes.song_id = Song.song_id
+      )`),
+      'likes_count'
+    ];
+
+    const fetchSongs = async (ids) => {
+      if (ids.length === 0) return [];
+      return await Song.findAll({
+        where: { song_id: ids, status: 'published' },
+        paranoid: false,
+        include: [
+          { model: ArtistProfile, attributes: ["stage_name"] },
+          { model: Album, attributes: ["title"] }
+        ],
+        attributes: { include: [likesCountCol] }
+      });
+    };
+
+    const [weeklyTrending, monthlyTrending, mostPlayed, mostLiked, recentlyReleased] = await Promise.all([
+      fetchSongs(weeklyIds),
+      fetchSongs(monthlyIds),
+      Song.findAll({
+        where: { status: 'published' },
+        paranoid: false,
+        include: [{ model: ArtistProfile, attributes: ["stage_name"] }],
+        order: [['play_count', 'DESC']],
+        limit: 10
+      }),
+      Song.findAll({
+        where: { status: 'published' },
+        paranoid: false,
+        include: [{ model: ArtistProfile, attributes: ["stage_name"] }],
+        attributes: { include: [likesCountCol] },
+        order: [[Sequelize.literal('likes_count'), 'DESC']],
+        limit: 10
+      }),
+      Song.findAll({
+        where: { status: 'published' },
+        paranoid: false,
+        include: [{ model: ArtistProfile, attributes: ["stage_name"] }],
+        order: [['release_date', 'DESC'], ['created_at', 'DESC']],
+        limit: 10
+      })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        weeklyTrending,
+        monthlyTrending,
+        mostPlayed,
+        mostLiked,
+        recentlyReleased
+      }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -411,8 +737,8 @@ exports.deleteDraftSong = async (req, res) => {
         return res.status(403).json({ success: false, message: "Forbidden: Cannot delete another artist's draft song" });
       }
     }
-    await song.destroy();
-    res.json({ success: true, message: 'Draft song deleted' });
+    await song.destroy(); // soft-delete
+    res.json({ success: true, message: 'Draft song soft-deleted' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -483,6 +809,7 @@ exports.getFeedbacks = async (req, res) => {
       include: [
         {
           model: Song,
+          paranoid: false,
           attributes: ["title", "cover_image"]
         }
       ]
@@ -608,6 +935,7 @@ module.exports = {
   browseAlbums: exports.browseAlbums,
   browseSongs: exports.browseSongs,
   browseCategories: exports.browseCategories,
+  getTrendingContent: exports.getTrendingContent,
   // admin
   createAlbum: exports.createAlbum,
   updateAlbum: exports.updateAlbum,
@@ -615,6 +943,10 @@ module.exports = {
   createSong: exports.createSong,
   updateSong: exports.updateSong,
   deleteSong: exports.deleteSong,
+  restoreDeletedSong: exports.restoreDeletedSong,
+  listDeletedSongs: exports.listDeletedSongs,
+  restoreDeletedAlbum: exports.restoreDeletedAlbum,
+  listDeletedAlbums: exports.listDeletedAlbums,
   createCategory: exports.createCategory,
   updateCategory: exports.updateCategory,
   deleteCategory: exports.deleteCategory,

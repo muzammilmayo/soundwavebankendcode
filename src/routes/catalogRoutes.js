@@ -5,6 +5,7 @@ const router = express.Router();
 const verifyToken = require('../middleware/authMiddleware');
 const checkPermission = require('../middleware/permissionMiddleware');
 const catalogController = require('../controllers/catalogController');
+const artistModeratorMiddleware = require('../middleware/artistModeratorMiddleware');
 
 // Middleware to allow Admins, Super Admins, and Artists to perform catalog operations
 const fs = require('fs');
@@ -51,7 +52,15 @@ const checkArtistOrAdmin = (requiredPermission) => {
             return next();
           }
           
-          return role.getPermissions().then(perms => {
+          const { ArtistModerator } = require('../models');
+          return ArtistModerator.findOne({
+            where: { user_id: user.id, status: 'active' }
+          }).then(moderator => {
+            if (moderator) {
+              debugLog('[checkArtistOrAdmin] User is active artist moderator. Allowing.');
+              return next();
+            }
+            return role.getPermissions().then(perms => {
             const permNames = perms.map(p => p.permission_name);
             debugLog(`[checkArtistOrAdmin] Role permissions: ${JSON.stringify(permNames)}. Required: ${requiredPermission}`);
             const has = perms.some(p => p.permission_name === requiredPermission);
@@ -63,8 +72,9 @@ const checkArtistOrAdmin = (requiredPermission) => {
             next();
           });
         });
-      })
-      .catch(err => {
+      });
+    })
+    .catch(err => {
         debugLog(`[checkArtistOrAdmin] ERROR: ${err.message}`);
         res.status(500).json({ success: false, message: 'Server error' });
       });
@@ -76,26 +86,33 @@ router.get('/artists', catalogController.browseArtists);
 router.get('/albums', catalogController.browseAlbums);
 router.get('/songs', catalogController.browseSongs);
 router.get('/categories', catalogController.browseCategories);
+router.get('/trending', catalogController.getTrendingContent);
 
 const imageUpload = require('../middleware/imageUploadMiddleware');
 
 // ---------------- Protected Album/Song Operations ----------------
-router.post('/albums', verifyToken, checkArtistOrAdmin('manage_catalog'), imageUpload.single('cover_image'), catalogController.createAlbum);
-router.put('/albums/:id', verifyToken, checkArtistOrAdmin('manage_catalog'), imageUpload.single('cover_image'), catalogController.updateAlbum);
-router.delete('/albums/:id', verifyToken, checkArtistOrAdmin('manage_catalog'), catalogController.deleteAlbum);
+router.post('/albums', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), imageUpload.single('cover_image'), catalogController.createAlbum);
+router.put('/albums/:id', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), imageUpload.single('cover_image'), catalogController.updateAlbum);
+router.delete('/albums/:id', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), catalogController.deleteAlbum);
 
-router.post('/songs', verifyToken, checkArtistOrAdmin('manage_catalog'), catalogController.createSong);
-router.put('/songs/:id', verifyToken, checkArtistOrAdmin('manage_catalog'), catalogController.updateSong);
-router.delete('/songs/:id', verifyToken, checkArtistOrAdmin('manage_catalog'), catalogController.deleteSong);
+// Soft Delete Listings and Restore for Artists
+router.get('/songs/deleted', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), catalogController.listDeletedSongs);
+router.post('/songs/:id/restore', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), catalogController.restoreDeletedSong);
+router.get('/albums/deleted', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), catalogController.listDeletedAlbums);
+router.post('/albums/:id/restore', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), catalogController.restoreDeletedAlbum);
+
+router.post('/songs', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), catalogController.createSong);
+router.put('/songs/:id', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), catalogController.updateSong);
+router.delete('/songs/:id', verifyToken, artistModeratorMiddleware, checkArtistOrAdmin('manage_catalog'), catalogController.deleteSong);
 
 // Category Operations (Admin only)
 
 // Draft Songs Endpoints (placeholder handlers)
-router.get('/songs/drafts', verifyToken, catalogController.listDraftSongs);
-router.post('/songs/draft', verifyToken, catalogController.createDraftSong);
-router.put('/songs/draft/:id', verifyToken, catalogController.updateDraftSong);
-router.delete('/songs/draft/:id', verifyToken, catalogController.deleteDraftSong);
-router.post('/songs/draft/:id/publish', verifyToken, catalogController.publishDraftSong);
+router.get('/songs/drafts', verifyToken, artistModeratorMiddleware, catalogController.listDraftSongs);
+router.post('/songs/draft', verifyToken, artistModeratorMiddleware, catalogController.createDraftSong);
+router.put('/songs/draft/:id', verifyToken, artistModeratorMiddleware, catalogController.updateDraftSong);
+router.delete('/songs/draft/:id', verifyToken, artistModeratorMiddleware, catalogController.deleteDraftSong);
+router.post('/songs/draft/:id/publish', verifyToken, artistModeratorMiddleware, catalogController.publishDraftSong);
 
 router.post('/categories', verifyToken, checkPermission('manage_catalog'), catalogController.createCategory);
 router.put('/categories/:id', verifyToken, checkPermission('manage_catalog'), catalogController.updateCategory);

@@ -52,6 +52,7 @@ exports.getState = async (req, res) => {
       include: [
         {
           model: Song,
+          paranoid: false,
           include: [ArtistProfile]
         }
       ]
@@ -94,6 +95,7 @@ exports.getState = async (req, res) => {
         {
           model: Song,
           as: "songs",
+          paranoid: false,
           include: [ArtistProfile],
           through: {
             attributes: ["order"]
@@ -331,7 +333,7 @@ exports.recordSongPlay = async (req, res) => {
     });
 
     // Increment play_count of the song
-    const song = await Song.findByPk(songId);
+    const song = await Song.findByPk(songId, { paranoid: false });
     if (song) {
       await song.increment("play_count", { by: 1 });
     }
@@ -351,6 +353,7 @@ exports.getRecentlyPlayed = async (req, res) => {
       include: [
         {
           model: Song,
+          paranoid: false,
           include: [ArtistProfile]
         }
       ],
@@ -359,6 +362,65 @@ exports.getRecentlyPlayed = async (req, res) => {
     });
 
     res.json({ success: true, history });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.listDeletedPlaylists = async (req, res) => {
+  try {
+    const { Playlist } = require('../models');
+    const { Op } = require('sequelize');
+    const playlists = await Playlist.findAll({
+      where: {
+        user_id: req.user.id,
+        deleted_at: { [Op.ne]: null }
+      },
+      paranoid: false
+    });
+    res.json({ success: true, playlists });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.restoreDeletedPlaylist = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { Playlist } = require('../models');
+    const playlist = await Playlist.findByPk(id, { paranoid: false });
+    
+    if (!playlist) return res.status(404).json({ success: false, message: "Playlist not found" });
+    if (playlist.user_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    await playlist.restore();
+    res.json({ success: true, message: "Playlist restored successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.trackActivity = async (req, res) => {
+  try {
+    const { action, songId } = req.body;
+    if (!action || !songId) {
+      return res.status(400).json({ success: false, message: "action and songId are required" });
+    }
+
+    const { InteractionLog } = require('../models');
+    await InteractionLog.create({
+      user_id: req.user.id,
+      interaction_type: action,
+      target_type: "song",
+      target_id: String(songId)
+    });
+
+    res.json({ success: true, message: `Activity logged: ${action}` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });

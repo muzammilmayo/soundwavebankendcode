@@ -7,6 +7,11 @@ exports.getProfile = async (req, res) => {
   try {
     const user = await UserService.getProfile(userId);
 
+    const { ArtistModerator } = require("../models");
+    const activeMod = await ArtistModerator.findOne({
+      where: { user_id: user.user_id, status: 'active' }
+    });
+
     return res.json({
       success: true,
       user: {
@@ -19,6 +24,8 @@ exports.getProfile = async (req, res) => {
         created_at: user.created_at,
         phone: user.phone,
         phone_number: user.phone,
+        is_artist_moderator: !!activeMod,
+        moderated_artist_id: activeMod ? activeMod.artist_id : null
       },
     });
   } catch (error) {
