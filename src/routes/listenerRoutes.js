@@ -55,4 +55,22 @@ router.get(
   listenerController.getRecentlyPlayed
 );
 
+router.get(
+  "/playlists/deleted",
+  verifyToken,
+  listenerController.listDeletedPlaylists
+);
+
+router.post(
+  "/playlists/:id/restore",
+  verifyToken,
+  listenerController.restoreDeletedPlaylist
+);
+
+router.post(
+  "/track-activity",
+  verifyToken,
+  listenerController.trackActivity
+);
+
 module.exports = router;

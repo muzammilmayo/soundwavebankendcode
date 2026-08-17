@@ -31,9 +31,79 @@ function ensureUploadsDir() {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
+/**
+ * Deletes a file from the server's uploads folder if it is no longer referenced anywhere else.
+ * Handles both relative/absolute paths and full URLs.
+ * @param {string} fileUrlOrPath - The file path or full URL of the uploaded asset.
+ * @param {object} [excludeOptions] - Optional. Exclude checking this specific entity to avoid self-matches during updates/deletes.
+ * @param {string} [excludeOptions.model] - 'Song', 'Album', or 'User'
+ * @param {number} [excludeOptions.id] - The primary key ID to exclude
+ */
+async function deleteFileByUrl(fileUrlOrPath, excludeOptions = null) {
+  if (!fileUrlOrPath) return;
+
+  try {
+    let filename = fileUrlOrPath;
+    if (fileUrlOrPath.includes('/uploads/')) {
+      filename = fileUrlOrPath.split('/uploads/')[1];
+    } else {
+      filename = path.basename(fileUrlOrPath);
+    }
+
+    if (!filename) return;
+
+    const filePath = path.join(getUploadsDir(), filename);
+    if (!fs.existsSync(filePath)) {
+      console.log(`[MediaService] File does not exist on disk: ${filePath}`);
+      return;
+    }
+
+    // Dynamic import to prevent circular dependency
+    const { Song, Album, User } = require('../models');
+    const { Op } = require('sequelize');
+
+    // Build conditions checking if this filename/URL is used in database
+    const songAudioWhere = { audio_file: { [Op.like]: `%${filename}%` } };
+    const songCoverWhere = { cover_image: { [Op.like]: `%${filename}%` } };
+    const albumCoverWhere = { cover_image: { [Op.like]: `%${filename}%` } };
+    const userAvatarWhere = { avatar: { [Op.like]: `%${filename}%` } };
+
+    // Exclude the current updating/deleting record if requested
+    if (excludeOptions) {
+      const { model, id } = excludeOptions;
+      if (model === 'Song') {
+        songAudioWhere.song_id = { [Op.ne]: id };
+        songCoverWhere.song_id = { [Op.ne]: id };
+      } else if (model === 'Album') {
+        albumCoverWhere.album_id = { [Op.ne]: id };
+      } else if (model === 'User') {
+        userAvatarWhere.user_id = { [Op.ne]: id };
+      }
+    }
+
+    const [songAudioCount, songCoverCount, albumCoverCount, userAvatarCount] = await Promise.all([
+      Song.count({ where: songAudioWhere }),
+      Song.count({ where: songCoverWhere }),
+      Album.count({ where: albumCoverWhere }),
+      User.count({ where: userAvatarWhere })
+    ]);
+
+    const totalUsage = songAudioCount + songCoverCount + albumCoverCount + userAvatarCount;
+    if (totalUsage === 0) {
+      fs.unlinkSync(filePath);
+      console.log(`[MediaService] Successfully unlinked orphaned asset: ${filename}`);
+    } else {
+      console.log(`[MediaService] Asset ${filename} is still referenced in DB (usage count: ${totalUsage}). Skipping unlink.`);
+    }
+  } catch (err) {
+    console.error(`[MediaService] Error unlinking file ${fileUrlOrPath}:`, err);
+  }
+}
 
 module.exports = {
   getUploadsDir,
   getFileUrl,
   ensureUploadsDir,
+  deleteFileByUrl,
 };
+

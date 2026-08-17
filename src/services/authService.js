@@ -49,6 +49,11 @@ const AuthService = {
       { expiresIn: "24h" }
     );
 
+    const { ArtistModerator } = require("../models");
+    const activeMod = await ArtistModerator.findOne({
+      where: { user_id: user.user_id, status: 'active' }
+    });
+
     return {
       token,
       user: {
@@ -56,6 +61,8 @@ const AuthService = {
         username: user.username,
         email: user.email,
         role: user.role_name,
+        is_artist_moderator: !!activeMod,
+        moderated_artist_id: activeMod ? activeMod.artist_id : null
       },
     };
   },

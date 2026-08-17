@@ -4,10 +4,28 @@ const multer = require('multer');
 const crypto = require('crypto');
 
 // Define storage location and filename generation
+const fs = require('fs');
+
+// Define storage location and filename generation
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Store uploads in a dedicated folder within the project root
-    const uploadPath = path.resolve(__dirname, '../uploads');
+    let subfolder = 'covers';
+    const urlPath = (req.baseUrl + req.path).toLowerCase();
+    
+    if (file.fieldname === 'audio') {
+      subfolder = 'songs';
+    } else if (file.fieldname === 'avatar' || urlPath.includes('avatar') || urlPath.includes('profile')) {
+      subfolder = 'avatars';
+    } else if (urlPath.includes('artist')) {
+      subfolder = 'artists';
+    } else if (urlPath.includes('album')) {
+      subfolder = 'albums';
+    }
+    
+    const uploadPath = path.resolve(__dirname, '../uploads', subfolder);
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
@@ -39,7 +57,46 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Export configured multer instance
+// Configured multer instance
 const upload = multer({ storage, fileFilter, limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB limit
 
-module.exports = upload;
+function normalizeReqFiles(req) {
+  const normalizeFile = (file) => {
+    if (file && file.path) {
+      const uploadsDir = path.resolve(__dirname, '../uploads');
+      file.filename = path.relative(uploadsDir, file.path).replace(/\\/g, '/');
+    }
+  };
+
+  if (req.file) {
+    normalizeFile(req.file);
+  }
+  if (req.files) {
+    for (const field in req.files) {
+      req.files[field].forEach(normalizeFile);
+    }
+  }
+}
+
+module.exports = {
+  fields: (fields) => {
+    const mw = upload.fields(fields);
+    return (req, res, next) => {
+      mw(req, res, (err) => {
+        if (err) return next(err);
+        normalizeReqFiles(req);
+        next();
+      });
+    };
+  },
+  single: (fieldName) => {
+    const mw = upload.single(fieldName);
+    return (req, res, next) => {
+      mw(req, res, (err) => {
+        if (err) return next(err);
+        normalizeReqFiles(req);
+        next();
+      });
+    };
+  }
+};

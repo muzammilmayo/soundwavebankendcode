@@ -7,6 +7,11 @@ exports.getProfile = async (req, res) => {
   try {
     const user = await UserService.getProfile(userId);
 
+    const { ArtistModerator } = require("../models");
+    const activeMod = await ArtistModerator.findOne({
+      where: { user_id: user.user_id, status: 'active' }
+    });
+
     return res.json({
       success: true,
       user: {
@@ -19,6 +24,8 @@ exports.getProfile = async (req, res) => {
         created_at: user.created_at,
         phone: user.phone,
         phone_number: user.phone,
+        is_artist_moderator: !!activeMod,
+        moderated_artist_id: activeMod ? activeMod.artist_id : null
       },
     });
   } catch (error) {
@@ -36,8 +43,16 @@ exports.updateProfile = async (req, res) => {
   const phoneToSave = phone !== undefined ? phone : phone_number;
 
   try {
+    const oldProfile = await UserModel.findProfileById(userId);
+    const oldAvatar = oldProfile ? oldProfile.avatar : null;
+
     await UserModel.updateProfile(userId, { username, address, avatar, phone: phoneToSave });
     
+    if (avatar && avatar !== oldAvatar) {
+      const mediaService = require("../services/mediaService");
+      await mediaService.deleteFileByUrl(oldAvatar);
+    }
+
     // Fetch updated record
     const updated = await UserModel.findProfileById(userId);
 
@@ -81,7 +96,12 @@ exports.deleteAccount = async (req, res) => {
       });
     }
 
+    const avatar = user.avatar;
     await UserModel.deleteById(userId);
+    if (avatar) {
+      const mediaService = require("../services/mediaService");
+      await mediaService.deleteFileByUrl(avatar);
+    }
 
     return res.json({
       success: true,

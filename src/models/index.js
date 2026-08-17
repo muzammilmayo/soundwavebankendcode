@@ -12,12 +12,16 @@ const ListeningHistory = require("./ListeningHistory");
 const Notification = require("./Notification");
 const Playlist = require("./Playlist");
 const PlaylistSong = require("./PlaylistSong");
+const InteractionLog = require("./InteractionLog");
+const Report = require("./Report");
+const ReportHistory = require("./ReportHistory");
 
 // Import catalog models by calling their initializer functions
 const Category = require("./Category")(sequelize, DataTypes);
 const ArtistProfile = require("./ArtistProfile")(sequelize, DataTypes);
 const Album = require("./Album")(sequelize, DataTypes);
 const Song = require("./Song")(sequelize, DataTypes);
+const ArtistModerator = require("./ArtistModerator")(sequelize, DataTypes);
 
 // Associations
 User.belongsTo(Role, { foreignKey: "role_id" });
@@ -104,6 +108,25 @@ ListeningHistory.belongsTo(User, { foreignKey: "user_id" });
 User.hasMany(Notification, { foreignKey: "user_id", onDelete: "CASCADE" });
 Notification.belongsTo(User, { foreignKey: "user_id" });
 
+// User & InteractionLog
+User.hasMany(InteractionLog, { foreignKey: "user_id", onDelete: "CASCADE" });
+InteractionLog.belongsTo(User, { foreignKey: "user_id" });
+
+// User & Report
+User.hasMany(Report, { foreignKey: "reporter_id", onDelete: "CASCADE" });
+Report.belongsTo(User, { as: "Reporter", foreignKey: "reporter_id" });
+
+User.hasMany(Report, { foreignKey: "assigned_to", onDelete: "SET NULL" });
+Report.belongsTo(User, { as: "Assignee", foreignKey: "assigned_to" });
+
+// Report & ReportHistory
+Report.hasMany(ReportHistory, { foreignKey: "report_id", onDelete: "CASCADE" });
+ReportHistory.belongsTo(Report, { foreignKey: "report_id" });
+
+// User & ReportHistory
+User.hasMany(ReportHistory, { foreignKey: "user_id", onDelete: "CASCADE" });
+ReportHistory.belongsTo(User, { foreignKey: "user_id" });
+
 // User & Playlists
 User.hasMany(Playlist, { foreignKey: "user_id", onDelete: "CASCADE" });
 Playlist.belongsTo(User, { foreignKey: "user_id" });
@@ -117,6 +140,14 @@ PlaylistSong.belongsTo(Playlist, { foreignKey: "playlist_id" });
 
 Song.hasMany(PlaylistSong, { foreignKey: "song_id" });
 PlaylistSong.belongsTo(Song, { foreignKey: "song_id" });
+
+// User & ArtistModerators
+User.hasMany(ArtistModerator, { foreignKey: "user_id", onDelete: "CASCADE" });
+ArtistModerator.belongsTo(User, { foreignKey: "user_id" });
+
+// ArtistProfile & ArtistModerators
+ArtistProfile.hasMany(ArtistModerator, { foreignKey: "artist_id", onDelete: "CASCADE" });
+ArtistModerator.belongsTo(ArtistProfile, { foreignKey: "artist_id" });
 
 module.exports = {
   sequelize,
@@ -136,4 +167,8 @@ module.exports = {
   Notification,
   Playlist,
   PlaylistSong,
+  InteractionLog,
+  Report,
+  ReportHistory,
+  ArtistModerator,
 };

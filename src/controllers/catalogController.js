@@ -1,15 +1,19 @@
 // backend/src/controllers/catalogController.js
 
-const { ArtistProfile, Album, Song, Category, User, Role, Feedback, ArtistFollower, Notification } = require("../models");
-const { Op } = require("sequelize");
+const { ArtistProfile, Album, Song, Category, User, Role, Feedback, ArtistFollower, Notification, InteractionLog } = require("../models");
+const { Op, Sequelize } = require("sequelize");
 const mediaService = require("../services/mediaService");
+const cacheService = require("../services/cacheService");
+const RequestValidator = require("../validators");
 
 /** ---------------------------------------------------------------
- * PUBLIC ENDPOINTS – accessible to any logged‑in user (or even unauth).
+ * PUBLIC ENDPOINTS – accessible to any logged‑in user (or unauth)
  * --------------------------------------------------------------- */
 exports.browseArtists = async (req, res) => {
   try {
     const { search } = req.query;
+    const { page, limit, offset } = RequestValidator.sanitizePagination(req.query, 10, 50);
+
     const whereClause = {};
     if (search) {
       whereClause[Op.or] = [
@@ -17,21 +21,40 @@ exports.browseArtists = async (req, res) => {
         { bio: { [Op.like]: `%${search}%` } }
       ];
     }
-    const artists = await ArtistProfile.findAll({
+
+    const { count, rows } = await ArtistProfile.findAndCountAll({
       where: whereClause,
       attributes: { exclude: ["created_at", "updated_at"] },
-      include: [{ model: User, attributes: ["username", "email"] }],
+      include: [{ model: User, attributes: ["username", "email"], where: { status: "Active" } }],
+      limit,
+      offset,
+      distinct: true
     });
-    res.json({ success: true, artists });
+
+    const totalPages = Math.ceil(count / limit);
+
+    res.json({ 
+      success: true, 
+      artists: rows,
+      pagination: {
+        totalRecords: count,
+        currentPage: page,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
+      }
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[browseArtists Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to browse artists." });
   }
 };
 
 exports.browseAlbums = async (req, res) => {
   try {
     const { search } = req.query;
+    const { page, limit, offset } = RequestValidator.sanitizePagination(req.query, 10, 50);
+
     const whereClause = { status: 'published' };
     if (search) {
       whereClause[Op.or] = [
@@ -39,60 +62,300 @@ exports.browseAlbums = async (req, res) => {
         { "$ArtistProfile.stage_name$": { [Op.like]: `%${search}%` } }
       ];
     }
-    const albums = await Album.findAll({
+
+    const { count, rows } = await Album.findAndCountAll({
       where: whereClause,
-      include: [{ model: ArtistProfile, attributes: ["stage_name"] }],
+      include: [
+        { 
+          model: ArtistProfile, 
+          attributes: ["stage_name"],
+          include: [{ model: User, attributes: [], where: { status: "Active" } }]
+        }
+      ],
+      limit,
+      offset,
+      distinct: true
     });
-    res.json({ success: true, albums });
+
+    const totalPages = Math.ceil(count / limit);
+
+    res.json({ 
+      success: true, 
+      albums: rows,
+      pagination: {
+        totalRecords: count,
+        currentPage: page,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
+      }
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[browseAlbums Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to browse albums." });
   }
 };
 
 exports.browseSongs = async (req, res) => {
   try {
-    const { search, category } = req.query;
-    const whereClause = { status: 'published' };
+    const { search, category, artist, album, year, duration, status, sort } = req.query;
+    const { page, limit, offset } = RequestValidator.sanitizePagination(req.query, 10, 50);
+    const whereClause = {};
 
-    if (category) {
-      whereClause.category_id = category;
+    // Lifecycle/status filtering
+    let allowedStatuses = ['published'];
+    if (req.user) {
+      const user = await User.findByPk(req.user.id);
+      const role = await Role.findByPk(user?.role_id);
+      if (role && (role.role_name === 'Admin' || role.role_name === 'Super Admin' || role.role_name === 'Moderator')) {
+        allowedStatuses = ['draft', 'pending_review', 'scheduled', 'published', 'archived'];
+      } else if (role && role.role_name === 'Artist') {
+        const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+        if (profile) {
+          whereClause[Op.or] = [
+            { status: 'published' },
+            { artist_profile_id: profile.artist_profile_id }
+          ];
+        }
+      }
+    }
+
+    if (!whereClause[Op.or]) {
+      if (status && allowedStatuses.includes(status)) {
+        whereClause.status = status;
+      } else {
+        whereClause.status = allowedStatuses;
+      }
+    }
+
+    if (category) whereClause.category_id = category;
+    if (artist) whereClause.artist_profile_id = artist;
+    if (album) whereClause.album_id = album;
+
+    if (year) {
+      whereClause.release_date = Sequelize.where(
+        Sequelize.fn('YEAR', Sequelize.col('Song.release_date')),
+        year
+      );
+    }
+
+    if (duration) {
+      if (duration === "short") whereClause.duration = { [Op.lt]: 180 };
+      else if (duration === "medium") whereClause.duration = { [Op.between]: [180, 300] };
+      else if (duration === "long") whereClause.duration = { [Op.gt]: 300 };
     }
 
     if (search) {
-      whereClause[Op.or] = [
+      const searchConditions = [
         { title: { [Op.like]: `%${search}%` } },
-        { "$ArtistProfile.stage_name$": { [Op.like]: `%${search}%` } }
+        { tags: { [Op.like]: `%${search}%` } },
+        { '$ArtistProfile.stage_name$': { [Op.like]: `%${search}%` } },
+        { '$Album.title$': { [Op.like]: `%${search}%` } },
+        { '$Category.name$': { [Op.like]: `%${search}%` } }
       ];
+      if (whereClause[Op.or]) {
+        whereClause[Op.and] = [
+          { [Op.or]: whereClause[Op.or] },
+          { [Op.or]: searchConditions }
+        ];
+        delete whereClause[Op.or];
+      } else {
+        whereClause[Op.or] = searchConditions;
+      }
+
+      InteractionLog.create({
+        user_id: req.user ? req.user.id : null,
+        interaction_type: "search",
+        target_type: "none",
+        target_id: null,
+        details: search
+      }).catch(err => console.error("[CatalogController] Error logging search:", err));
     }
 
-    const songs = await Song.findAll({
+    const likesCountCol = [
+      Sequelize.literal(`(
+        SELECT COUNT(*)
+        FROM song_likes AS likes
+        WHERE likes.song_id = Song.song_id
+      )`),
+      'likes_count'
+    ];
+
+    let order = [["created_at", "DESC"]];
+    if (sort === "oldest") order = [["created_at", "ASC"]];
+    else if (sort === "popular") order = [["play_count", "DESC"]];
+    else if (sort === "most_liked") order = [[Sequelize.literal('likes_count'), 'DESC']];
+    else if (sort === "alphabetical") order = [["title", "ASC"]];
+    else if (sort === "z-a") order = [["title", "DESC"]];
+
+    const { count, rows } = await Song.findAndCountAll({
       where: whereClause,
+      paranoid: false,
       include: [
-        { model: ArtistProfile, attributes: ["stage_name"] },
+        { 
+          model: ArtistProfile, 
+          attributes: ["stage_name"],
+          include: [{ model: User, attributes: [], where: { status: "Active" } }]
+        },
         { model: Album, attributes: ["title"] },
         { model: Category, attributes: ["name"] },
       ],
+      attributes: { include: [likesCountCol] },
+      order,
+      limit,
+      offset,
+      distinct: true
     });
-    res.json({ success: true, songs });
+
+    const totalPages = Math.ceil(count / limit);
+
+    res.json({ 
+      success: true, 
+      songs: rows,
+      pagination: {
+        totalRecords: count,
+        currentPage: page,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1
+      }
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[browseSongs Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to browse songs." });
   }
 };
 
+/**
+ * Cached Category Listing (5-minute TTL)
+ */
 exports.browseCategories = async (req, res) => {
   try {
-    const categories = await Category.findAll();
+    const cacheKey = "catalog:categories";
+    const cached = cacheService.get(cacheKey);
+    if (cached) {
+      return res.json({ success: true, categories: cached, fromCache: true });
+    }
+
+    const categories = await Category.findAll({ order: [['name', 'ASC']] });
+    cacheService.set(cacheKey, categories, 300, ['categories']);
     res.json({ success: true, categories });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[browseCategories Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to browse categories." });
+  }
+};
+
+/**
+ * Cached Trending Aggregation (60-second TTL to handle heavy traffic)
+ */
+exports.getTrendingContent = async (req, res) => {
+  try {
+    const cacheKey = "catalog:trending_content";
+    const cached = cacheService.get(cacheKey);
+    if (cached) {
+      return res.json({ success: true, data: cached, fromCache: true });
+    }
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const getTrendingIds = async (sinceDate) => {
+      const logs = await InteractionLog.findAll({
+        attributes: [
+          'target_id',
+          [Sequelize.fn('COUNT', Sequelize.col('id')), 'interaction_count']
+        ],
+        where: {
+          interaction_type: ['play', 'like'],
+          target_type: 'song',
+          created_at: { [Op.gte]: sinceDate }
+        },
+        group: ['target_id'],
+        order: [[Sequelize.literal('interaction_count'), 'DESC']],
+        limit: 10
+      });
+      return logs.map(l => parseInt(l.target_id, 10)).filter(id => !isNaN(id));
+    };
+
+    const [weeklyIds, monthlyIds] = await Promise.all([
+      getTrendingIds(sevenDaysAgo),
+      getTrendingIds(thirtyDaysAgo)
+    ]);
+
+    const likesCountCol = [
+      Sequelize.literal(`(
+        SELECT COUNT(*)
+        FROM song_likes AS likes
+        WHERE likes.song_id = Song.song_id
+      )`),
+      'likes_count'
+    ];
+
+    const fetchSongs = async (ids) => {
+      if (ids.length === 0) return [];
+      return await Song.findAll({
+        where: { song_id: ids, status: 'published' },
+        paranoid: false,
+        include: [
+          { model: ArtistProfile, attributes: ["stage_name"] },
+          { model: Album, attributes: ["title"] }
+        ],
+        attributes: { include: [likesCountCol] }
+      });
+    };
+
+    const [weeklyTrending, monthlyTrending, mostPlayed, mostLiked, recentlyReleased] = await Promise.all([
+      fetchSongs(weeklyIds),
+      fetchSongs(monthlyIds),
+      Song.findAll({
+        where: { status: 'published' },
+        paranoid: false,
+        include: [{ model: ArtistProfile, attributes: ["stage_name"] }],
+        order: [['play_count', 'DESC']],
+        limit: 10
+      }),
+      Song.findAll({
+        where: { status: 'published' },
+        paranoid: false,
+        include: [{ model: ArtistProfile, attributes: ["stage_name"] }],
+        attributes: { include: [likesCountCol] },
+        order: [[Sequelize.literal('likes_count'), 'DESC']],
+        limit: 10
+      }),
+      Song.findAll({
+        where: { status: 'published' },
+        paranoid: false,
+        include: [{ model: ArtistProfile, attributes: ["stage_name"] }],
+        order: [['release_date', 'DESC'], ['created_at', 'DESC']],
+        limit: 10
+      })
+    ]);
+
+    const resultData = {
+      weeklyTrending,
+      monthlyTrending,
+      mostPlayed,
+      mostLiked,
+      recentlyReleased
+    };
+
+    // Cache computed trending aggregate
+    cacheService.set(cacheKey, resultData, 60, ['trending', 'songs']);
+
+    res.json({
+      success: true,
+      data: resultData
+    });
+  } catch (err) {
+    console.error("[getTrendingContent Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to load trending content." });
   }
 };
 
 /** ---------------------------------------------------------------
- * ADMIN/ARTIST ENDPOINTS – guarded by permissionMiddleware
+ * ADMIN/ARTIST ENDPOINTS – with automatic cache invalidation
  * --------------------------------------------------------------- */
 exports.createAlbum = async (req, res) => {
   try {
@@ -121,10 +384,12 @@ exports.createAlbum = async (req, res) => {
       status: computedStatus,
       scheduled_for: scheduled_for || null
     });
+
+    cacheService.invalidateTag('albums');
     res.status(201).json({ success: true, album });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[createAlbum Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to create album." });
   }
 };
 
@@ -153,15 +418,19 @@ exports.updateAlbum = async (req, res) => {
     if (status !== undefined) updateData.status = status;
     if (scheduled_for !== undefined) updateData.scheduled_for = scheduled_for;
     if (req.body.is_published !== undefined) updateData.status = req.body.is_published ? 'published' : 'draft';
-    if (cover_image !== undefined) {
-      updateData.cover_image = cover_image;
+    if (cover_image !== undefined) updateData.cover_image = cover_image;
+
+    const oldCover = album.cover_image;
+    await album.update(updateData);
+    if (updateData.cover_image && updateData.cover_image !== oldCover) {
+      await mediaService.deleteFileByUrl(oldCover);
     }
 
-    await album.update(updateData);
+    cacheService.invalidateTag('albums');
     res.json({ success: true, album });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[updateAlbum Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update album." });
   }
 };
 
@@ -181,10 +450,11 @@ exports.deleteAlbum = async (req, res) => {
     }
 
     await album.destroy();
-    res.json({ success: true, message: "Album deleted" });
+    cacheService.invalidateTag('albums');
+    res.json({ success: true, message: "Album soft-deleted successfully" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[deleteAlbum Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete album." });
   }
 };
 
@@ -204,10 +474,15 @@ exports.createSong = async (req, res) => {
       songData.status = songData.is_published ? 'published' : 'draft';
       delete songData.is_published;
     }
+    
     const song = await Song.create(songData);
 
-    // Notify all followers
-    if (artistProfileId) {
+    // Invalidate caches
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
+
+    // Notify followers
+    if (artistProfileId && songData.status === 'published') {
       const profile = await ArtistProfile.findByPk(artistProfileId);
       const followers = await ArtistFollower.findAll({
         where: { artist_profile_id: artistProfileId }
@@ -231,8 +506,8 @@ exports.createSong = async (req, res) => {
 
     res.status(201).json({ success: true, song });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[createSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to create song." });
   }
 };
 
@@ -256,11 +531,24 @@ exports.updateSong = async (req, res) => {
       updateData.status = updateData.is_published ? 'published' : 'draft';
       delete updateData.is_published;
     }
+    const oldAudio = song.audio_file;
+    const oldCover = song.cover_image;
+    
     await song.update(updateData);
+
+    if (updateData.audio_file && updateData.audio_file !== oldAudio) {
+      await mediaService.deleteFileByUrl(oldAudio);
+    }
+    if (updateData.cover_image && updateData.cover_image !== oldCover) {
+      await mediaService.deleteFileByUrl(oldCover);
+    }
+
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
     res.json({ success: true, song });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[updateSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update song." });
   }
 };
 
@@ -280,16 +568,94 @@ exports.deleteSong = async (req, res) => {
     }
 
     await song.destroy();
-    res.json({ success: true, message: "Song deleted" });
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
+    res.json({ success: true, message: "Song soft-deleted successfully" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[deleteSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete song." });
   }
 };
 
-// Draft Songs Endpoints
+exports.restoreDeletedSong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const song = await Song.findByPk(id, { paranoid: false });
+    if (!song) return res.status(404).json({ success: false, message: "Song not found" });
 
-/** List Draft Songs for the authenticated artist */
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (song.artist_profile_id != profile?.artist_profile_id) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    await song.restore();
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
+    res.json({ success: true, message: "Song restored successfully" });
+  } catch (err) {
+    console.error("[restoreDeletedSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to restore song." });
+  }
+};
+
+exports.listDeletedSongs = async (req, res) => {
+  try {
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
+    
+    const songs = await Song.findAll({
+      where: {
+        artist_profile_id: profile.artist_profile_id,
+        deleted_at: { [Op.ne]: null }
+      },
+      paranoid: false
+    });
+    res.json({ success: true, songs });
+  } catch (err) {
+    console.error("[listDeletedSongs Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to list deleted songs." });
+  }
+};
+
+exports.restoreDeletedAlbum = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const album = await Album.findByPk(id, { paranoid: false });
+    if (!album) return res.status(404).json({ success: false, message: "Album not found" });
+
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (album.artist_profile_id != profile?.artist_profile_id) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    await album.restore();
+    cacheService.invalidateTag('albums');
+    res.json({ success: true, message: "Album restored successfully" });
+  } catch (err) {
+    console.error("[restoreDeletedAlbum Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to restore album." });
+  }
+};
+
+exports.listDeletedAlbums = async (req, res) => {
+  try {
+    const profile = await ArtistProfile.findOne({ where: { user_id: req.user.id } });
+    if (!profile) return res.status(404).json({ success: false, message: "Artist profile not found" });
+
+    const albums = await Album.findAll({
+      where: {
+        artist_profile_id: profile.artist_profile_id,
+        deleted_at: { [Op.ne]: null }
+      },
+      paranoid: false
+    });
+    res.json({ success: true, albums });
+  } catch (err) {
+    console.error("[listDeletedAlbums Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to list deleted albums." });
+  }
+};
+
 exports.listDraftSongs = async (req, res) => {
   try {
     const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
@@ -303,12 +669,11 @@ exports.listDraftSongs = async (req, res) => {
     const drafts = await Song.findAll({ where: whereClause, include: [{ model: Album, attributes: ['title'] }, { model: Category, attributes: ['name'] }] });
     res.json({ success: true, drafts });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[listDraftSongs Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to list draft songs." });
   }
 };
 
-/** Create a draft song */
 exports.createDraftSong = async (req, res) => {
   try {
     const roleId = await User.findByPk(req.user.id).then(u => u?.role_id);
@@ -323,12 +688,11 @@ exports.createDraftSong = async (req, res) => {
     const song = await Song.create(songData);
     res.status(201).json({ success: true, song });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[createDraftSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to create draft song." });
   }
 };
 
-/** Update a draft song */
 exports.updateDraftSong = async (req, res) => {
   try {
     const { id } = req.params;
@@ -347,12 +711,11 @@ exports.updateDraftSong = async (req, res) => {
     await song.update(updateData);
     res.json({ success: true, song });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[updateDraftSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update draft song." });
   }
 };
 
-/** Delete a draft song */
 exports.deleteDraftSong = async (req, res) => {
   try {
     const { id } = req.params;
@@ -368,14 +731,13 @@ exports.deleteDraftSong = async (req, res) => {
       }
     }
     await song.destroy();
-    res.json({ success: true, message: 'Draft song deleted' });
+    res.json({ success: true, message: 'Draft song soft-deleted' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[deleteDraftSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete draft song." });
   }
 };
 
-/** Publish a draft song */
 exports.publishDraftSong = async (req, res) => {
   try {
     const { id } = req.params;
@@ -391,20 +753,23 @@ exports.publishDraftSong = async (req, res) => {
       }
     }
     await song.update({ status: 'published', scheduled_for: null });
+    cacheService.invalidateTag('songs');
+    cacheService.invalidateTag('trending');
     res.json({ success: true, song });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[publishDraftSong Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to publish draft song." });
   }
 };
 
 exports.createCategory = async (req, res) => {
   try {
     const category = await Category.create(req.body);
+    cacheService.invalidateTag('categories');
     res.status(201).json({ success: true, category });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[createCategory Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to create category." });
   }
 };
 
@@ -414,10 +779,11 @@ exports.updateCategory = async (req, res) => {
     const [rows] = await Category.update(req.body, { where: { category_id: id } });
     if (rows === 0) return res.status(404).json({ success: false, message: "Category not found" });
     const category = await Category.findByPk(id);
+    cacheService.invalidateTag('categories');
     res.json({ success: true, category });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[updateCategory Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update category." });
   }
 };
 
@@ -426,10 +792,11 @@ exports.deleteCategory = async (req, res) => {
     const { id } = req.params;
     const rows = await Category.destroy({ where: { category_id: id } });
     if (!rows) return res.status(404).json({ success: false, message: "Category not found" });
+    cacheService.invalidateTag('categories');
     res.json({ success: true, message: "Category deleted" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[deleteCategory Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete category." });
   }
 };
 
@@ -439,9 +806,11 @@ exports.getFeedbacks = async (req, res) => {
       include: [
         {
           model: Song,
+          paranoid: false,
           attributes: ["title", "cover_image"]
         }
-      ]
+      ],
+      limit: 100
     });
     const formatted = feedbacks.map(f => {
       const json = f.toJSON();
@@ -450,14 +819,16 @@ exports.getFeedbacks = async (req, res) => {
     });
     res.json({ success: true, feedbacks: formatted });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[getFeedbacks Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to retrieve feedbacks." });
   }
 };
 
 exports.submitFeedback = async (req, res) => {
   try {
     const { id, song_id, rating, comment } = req.body;
+    if (!song_id) return res.status(400).json({ success: false, message: "song_id is required" });
+
     const user = await User.findByPk(req.user.id);
     const username = user ? user.username : "Anonymous Listener";
     
@@ -466,8 +837,8 @@ exports.submitFeedback = async (req, res) => {
       song_id,
       user_id: req.user.id,
       username,
-      rating,
-      comment,
+      rating: rating || 5,
+      comment: comment || "",
       timestamp: new Date().toISOString(),
       edited: false,
       likes: 0,
@@ -480,8 +851,8 @@ exports.submitFeedback = async (req, res) => {
 
     res.status(201).json({ success: true, feedback: formatted });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[submitFeedback Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to submit feedback." });
   }
 };
 
@@ -508,8 +879,8 @@ exports.updateFeedback = async (req, res) => {
 
     res.json({ success: true, feedback: formatted });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[updateFeedback Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to update feedback." });
   }
 };
 
@@ -526,8 +897,8 @@ exports.deleteFeedback = async (req, res) => {
     await feedback.destroy();
     res.json({ success: true, message: "Feedback deleted" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[deleteFeedback Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to delete feedback." });
   }
 };
 
@@ -553,34 +924,35 @@ exports.toggleLikeFeedback = async (req, res) => {
 
     res.json({ success: true, likes: feedback.likes, likedBy });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("[toggleLikeFeedback Error]:", err);
+    res.status(500).json({ success: false, message: "Failed to toggle feedback like." });
   }
 };
 
 module.exports = {
-  // public
   browseArtists: exports.browseArtists,
   browseAlbums: exports.browseAlbums,
   browseSongs: exports.browseSongs,
   browseCategories: exports.browseCategories,
-  // admin
+  getTrendingContent: exports.getTrendingContent,
   createAlbum: exports.createAlbum,
   updateAlbum: exports.updateAlbum,
   deleteAlbum: exports.deleteAlbum,
   createSong: exports.createSong,
   updateSong: exports.updateSong,
   deleteSong: exports.deleteSong,
+  restoreDeletedSong: exports.restoreDeletedSong,
+  listDeletedSongs: exports.listDeletedSongs,
+  restoreDeletedAlbum: exports.restoreDeletedAlbum,
+  listDeletedAlbums: exports.listDeletedAlbums,
   createCategory: exports.createCategory,
   updateCategory: exports.updateCategory,
   deleteCategory: exports.deleteCategory,
-  // feedback
   getFeedbacks: exports.getFeedbacks,
   submitFeedback: exports.submitFeedback,
   updateFeedback: exports.updateFeedback,
   deleteFeedback: exports.deleteFeedback,
   toggleLikeFeedback: exports.toggleLikeFeedback,
-  // Draft song endpoints
   listDraftSongs: exports.listDraftSongs,
   createDraftSong: exports.createDraftSong,
   updateDraftSong: exports.updateDraftSong,
