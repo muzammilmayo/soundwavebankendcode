@@ -50,6 +50,14 @@ const User = sequelize.define(
       type: DataTypes.STRING(20),
       defaultValue: "Active",
     },
+    is_online: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    last_seen_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

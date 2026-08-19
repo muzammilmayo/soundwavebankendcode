@@ -13,13 +13,15 @@ class SchedulerService {
     if (this.intervalId) {
       clearInterval(this.intervalId);
     }
-    console.log('[SchedulerService] Starting content scheduler...');
+    console.log('[SchedulerService] Starting content scheduler and online status sweeper...');
     this.intervalId = setInterval(async () => {
       await this.publishScheduledContent();
+      await this.sweepOfflineUsers();
     }, intervalMs);
     
     // Run immediately on start
     this.publishScheduledContent();
+    this.sweepOfflineUsers();
   }
 
   stop() {
@@ -63,6 +65,18 @@ class SchedulerService {
       }
     } catch (err) {
       console.error('[SchedulerService] Error publishing scheduled content:', err);
+    }
+  }
+
+  async sweepOfflineUsers() {
+    try {
+      const UserModel = require('../models/userModel');
+      const affected = await UserModel.markStaleUsersOffline(2); // 2 minutes threshold
+      if (affected > 0) {
+        console.log(`[SchedulerService] Swept ${affected} inactive user(s) to Offline status.`);
+      }
+    } catch (err) {
+      console.error('[SchedulerService] Error sweeping stale online users:', err);
     }
   }
 }

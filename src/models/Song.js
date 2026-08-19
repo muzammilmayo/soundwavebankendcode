@@ -40,6 +40,26 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(255),
         allowNull: true,
       },
+
+      // ── Lyrics Generation ──────────────────────────────────────────
+      lyrics: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      lyrics_status: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+        defaultValue: 'none',
+        // Allowed values: 'none' | 'pending' | 'processing' | 'completed' | 'failed'
+      },
+      lyrics_error: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      lyrics_job_id: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+      },
     },
     {
       tableName: "songs",

@@ -1,4 +1,5 @@
 const AuthService = require("../services/authService");
+const UserModel = require("../models/userModel");
 
 // =========================
 // Register
@@ -46,7 +47,7 @@ exports.login = async (req, res) => {
     res.cookie('auth_token', token, {
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
     res.status(200).json({
       success: true,
@@ -140,11 +141,36 @@ exports.resetPassword = async (req, res) => {
 // =========================
 // Logout
 // =========================
-exports.logout = (req, res) => {
+exports.logout = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.body?.user_id;
+    if (userId) {
+      await UserModel.setOnlineStatus(userId, false);
+    }
+  } catch (error) {
+    console.error("Error setting user offline on logout:", error);
+  }
+
   // Clear the authentication cookie
   res.clearCookie('auth_token');
   res.status(200).json({
     success: true,
     message: "Logout Successfully",
   });
+};
+
+// =========================
+// Heartbeat (keeps user online)
+// =========================
+exports.heartbeat = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (userId) {
+      await UserModel.updateLastSeen(userId);
+    }
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Heartbeat error:", error);
+    res.status(200).json({ success: true }); // Don't break client on heartbeat errors
+  }
 };

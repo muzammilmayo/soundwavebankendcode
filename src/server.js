@@ -68,6 +68,9 @@ app.use("/api/listener", require("./routes/listenerRoutes"));
 app.use("/api/superadmin", require("./routes/superadminRoutes"));
 app.use("/api/reports", require("./routes/reportRoutes"));
 app.use("/api/catalog", require("./routes/catalogRoutes"));
+app.use("/api/lyrics", require("./routes/lyricsRoutes"));
+app.use("/api/songs", require("./routes/lyricsRoutes"));
+
 
 // 9. Serve Uploaded Media Files Securely
 const { ensureUploadsDir } = require("./services/mediaService");

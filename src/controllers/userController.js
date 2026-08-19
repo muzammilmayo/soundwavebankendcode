@@ -14,6 +14,7 @@ exports.getProfile = async (req, res) => {
 
     return res.json({
       success: true,
+      token: req.token,
       user: {
         id: user.user_id,
         username: user.username,

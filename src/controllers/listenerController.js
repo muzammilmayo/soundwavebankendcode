@@ -1,7 +1,7 @@
 // backend/src/controllers/listenerController.js
 const fs = require('fs').promises;
-const fsSync = require('fs');
 const path = require('path');
+const { Op } = require('sequelize');
 const { 
   SongLike, 
   ArtistFollower, 
@@ -18,6 +18,31 @@ const {
 
 const getStateFilePath = (userId) => {
   return path.join(__dirname, '../uploads', `userState_${userId}.json`);
+};
+
+/**
+ * Helper to robustly extract positive integer ID from various payload formats
+ */
+const extractId = (item, primaryKey, fallbackKeys = []) => {
+  if (item === undefined || item === null) return null;
+  if (typeof item === 'number') return item > 0 ? item : null;
+  if (typeof item === 'string') {
+    const num = parseInt(item, 10);
+    return !isNaN(num) && num > 0 ? num : null;
+  }
+  if (typeof item === 'object') {
+    if (item[primaryKey] !== undefined && item[primaryKey] !== null) {
+      const num = parseInt(item[primaryKey], 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    for (const key of fallbackKeys) {
+      if (item[key] !== undefined && item[key] !== null) {
+        const num = parseInt(item[key], 10);
+        if (!isNaN(num) && num > 0) return num;
+      }
+    }
+  }
+  return null;
 };
 
 exports.getDashboard = (req, res) => {
@@ -42,9 +67,10 @@ exports.createPlaylist = (req, res) => {
 };
 
 /**
- * Optimized getState:
+ * Optimized & Robust getState:
  * - Asynchronous non-blocking file access
  * - Parallel execution of database queries using Promise.all
+ * - Clean JSON serialization
  */
 exports.getState = async (req, res) => {
   try {
@@ -78,14 +104,14 @@ exports.getState = async (req, res) => {
           {
             model: Song,
             paranoid: false,
-            include: [{ model: ArtistProfile, attributes: ["artist_profile_id", "stage_name", "avatar"] }]
+            include: [{ model: ArtistProfile, attributes: ["artist_profile_id", "stage_name", "profile_image"] }]
           }
         ]
       }),
       // Followed Artists
       ArtistFollower.findAll({
         where: { user_id: userId },
-        include: [{ model: ArtistProfile, attributes: ["artist_profile_id", "stage_name", "avatar", "bio"] }]
+        include: [{ model: ArtistProfile }]
       }),
       // Saved Albums
       SavedAlbum.findAll({
@@ -120,9 +146,9 @@ exports.getState = async (req, res) => {
       })
     ]);
 
-    state.likedSongs = likes.map(l => l.Song).filter(Boolean);
-    state.followedArtists = follows.map(f => f.ArtistProfile).filter(Boolean);
-    state.savedAlbums = saved.map(s => s.Album).filter(Boolean);
+    state.likedSongs = likes.map(l => l.Song ? l.Song.toJSON() : null).filter(Boolean);
+    state.followedArtists = follows.map(f => f.ArtistProfile ? f.ArtistProfile.toJSON() : null).filter(Boolean);
+    state.savedAlbums = saved.map(s => s.Album ? s.Album.toJSON() : null).filter(Boolean);
     state.notifications = dbNotifs.map(n => {
       const json = n.toJSON();
       json.targetId = n.target_id;
@@ -151,9 +177,10 @@ exports.getState = async (req, res) => {
 };
 
 /**
- * Optimized saveState:
- * - Asynchronous non-blocking file write
- * - Parallel execution across distinct entities (likes, follows, saved albums, notifications, playlists)
+ * Optimized & Robust saveState:
+ * - Handles IDs as numbers, strings, or nested objects
+ * - Safe array checking and bulk database operations
+ * - Error isolation so individual syncs don't block the rest
  */
 exports.saveState = async (req, res) => {
   try {
@@ -167,7 +194,7 @@ exports.saveState = async (req, res) => {
       notifications = [] 
     } = req.body;
 
-    // 1. Asynchronous non-blocking write for offline state
+    // 1. Non-blocking file write for offline state
     const filePath = getStateFilePath(userId);
     const fileState = { downloadedSongs };
     fs.writeFile(filePath, JSON.stringify(fileState, null, 2), 'utf8').catch(err => {
@@ -176,192 +203,215 @@ exports.saveState = async (req, res) => {
 
     // 2. Sync Liked Songs
     const syncLikes = async () => {
-      const currentLikes = await SongLike.findAll({ where: { user_id: userId } });
-      const currentLikedSongIds = currentLikes.map(l => l.song_id);
-      const newLikedSongIds = likedSongs.map(s => s.song_id);
+      try {
+        const currentLikes = await SongLike.findAll({ where: { user_id: userId } });
+        const currentLikedSongIds = currentLikes.map(l => l.song_id);
+        const newLikedSongIds = likedSongs.map(s => extractId(s, 'song_id', ['id'])).filter(Boolean);
 
-      const toAddLikes = newLikedSongIds.filter(id => !currentLikedSongIds.includes(id));
-      const toRemoveLikes = currentLikedSongIds.filter(id => !newLikedSongIds.includes(id));
+        const toAddLikes = newLikedSongIds.filter(id => !currentLikedSongIds.includes(id));
+        const toRemoveLikes = currentLikedSongIds.filter(id => !newLikedSongIds.includes(id));
 
-      const ops = [];
-      if (toAddLikes.length > 0) {
-        ops.push(
-          SongLike.bulkCreate(toAddLikes.map(songId => ({ user_id: userId, song_id: songId }))),
+        if (toAddLikes.length > 0) {
+          await SongLike.bulkCreate(
+            toAddLikes.map(songId => ({ user_id: userId, song_id: songId })),
+            { ignoreDuplicates: true }
+          );
           InteractionLog.bulkCreate(toAddLikes.map(songId => ({
             user_id: userId,
             interaction_type: "like",
             target_type: "song",
             target_id: String(songId)
-          })))
-        );
-      }
-      if (toRemoveLikes.length > 0) {
-        ops.push(
-          SongLike.destroy({ where: { user_id: userId, song_id: toRemoveLikes } }),
+          }))).catch(err => console.error(err));
+        }
+        if (toRemoveLikes.length > 0) {
+          await SongLike.destroy({ where: { user_id: userId, song_id: { [Op.in]: toRemoveLikes } } });
           InteractionLog.bulkCreate(toRemoveLikes.map(songId => ({
             user_id: userId,
             interaction_type: "unlike",
             target_type: "song",
             target_id: String(songId)
-          })))
-        );
+          }))).catch(err => console.error(err));
+        }
+      } catch (err) {
+        console.error("[syncLikes Error]:", err);
       }
-      await Promise.all(ops);
     };
 
     // 3. Sync Followed Artists
     const syncFollows = async () => {
-      const currentFollows = await ArtistFollower.findAll({ where: { user_id: userId } });
-      const currentFollowedArtistIds = currentFollows.map(f => f.artist_profile_id);
-      const newFollowedArtistIds = followedArtists.map(a => a.artist_profile_id);
+      try {
+        const currentFollows = await ArtistFollower.findAll({ where: { user_id: userId } });
+        const currentFollowedArtistIds = currentFollows.map(f => f.artist_profile_id);
+        const newFollowedArtistIds = followedArtists.map(a => extractId(a, 'artist_profile_id', ['id', 'artist_id'])).filter(Boolean);
 
-      const toAddFollows = newFollowedArtistIds.filter(id => !currentFollowedArtistIds.includes(id));
-      const toRemoveFollows = currentFollowedArtistIds.filter(id => !newFollowedArtistIds.includes(id));
+        const toAddFollows = newFollowedArtistIds.filter(id => !currentFollowedArtistIds.includes(id));
+        const toRemoveFollows = currentFollowedArtistIds.filter(id => !newFollowedArtistIds.includes(id));
 
-      const ops = [];
-      if (toAddFollows.length > 0) {
-        ops.push(
-          ArtistFollower.bulkCreate(toAddFollows.map(artistProfileId => ({ user_id: userId, artist_profile_id: artistProfileId }))),
+        if (toAddFollows.length > 0) {
+          await ArtistFollower.bulkCreate(
+            toAddFollows.map(artistProfileId => ({ user_id: userId, artist_profile_id: artistProfileId })),
+            { ignoreDuplicates: true }
+          );
           InteractionLog.bulkCreate(toAddFollows.map(artistProfileId => ({
             user_id: userId,
             interaction_type: "follow",
             target_type: "artist",
             target_id: String(artistProfileId)
-          })))
-        );
-      }
-      if (toRemoveFollows.length > 0) {
-        ops.push(
-          ArtistFollower.destroy({ where: { user_id: userId, artist_profile_id: toRemoveFollows } }),
+          }))).catch(err => console.error(err));
+        }
+        if (toRemoveFollows.length > 0) {
+          await ArtistFollower.destroy({ where: { user_id: userId, artist_profile_id: { [Op.in]: toRemoveFollows } } });
           InteractionLog.bulkCreate(toRemoveFollows.map(artistProfileId => ({
             user_id: userId,
             interaction_type: "unfollow",
             target_type: "artist",
             target_id: String(artistProfileId)
-          })))
-        );
+          }))).catch(err => console.error(err));
+        }
+      } catch (err) {
+        console.error("[syncFollows Error]:", err);
       }
-      await Promise.all(ops);
     };
 
     // 4. Sync Saved Albums
     const syncSavedAlbums = async () => {
-      const currentSaved = await SavedAlbum.findAll({ where: { user_id: userId } });
-      const currentSavedAlbumIds = currentSaved.map(s => s.album_id);
-      const newSavedAlbumIds = savedAlbums.map(a => a.album_id);
+      try {
+        const currentSaved = await SavedAlbum.findAll({ where: { user_id: userId } });
+        const currentSavedAlbumIds = currentSaved.map(s => s.album_id);
+        const newSavedAlbumIds = savedAlbums.map(a => extractId(a, 'album_id', ['id'])).filter(Boolean);
 
-      const toAddSaved = newSavedAlbumIds.filter(id => !currentSavedAlbumIds.includes(id));
-      const toRemoveSaved = currentSavedAlbumIds.filter(id => !newSavedAlbumIds.includes(id));
+        const toAddSaved = newSavedAlbumIds.filter(id => !currentSavedAlbumIds.includes(id));
+        const toRemoveSaved = currentSavedAlbumIds.filter(id => !newSavedAlbumIds.includes(id));
 
-      const ops = [];
-      if (toAddSaved.length > 0) {
-        ops.push(
-          SavedAlbum.bulkCreate(toAddSaved.map(albumId => ({ user_id: userId, album_id: albumId }))),
+        if (toAddSaved.length > 0) {
+          await SavedAlbum.bulkCreate(
+            toAddSaved.map(albumId => ({ user_id: userId, album_id: albumId })),
+            { ignoreDuplicates: true }
+          );
           InteractionLog.bulkCreate(toAddSaved.map(albumId => ({
             user_id: userId,
             interaction_type: "save_album",
             target_type: "album",
             target_id: String(albumId)
-          })))
-        );
-      }
-      if (toRemoveSaved.length > 0) {
-        ops.push(
-          SavedAlbum.destroy({ where: { user_id: userId, album_id: toRemoveSaved } }),
+          }))).catch(err => console.error(err));
+        }
+        if (toRemoveSaved.length > 0) {
+          await SavedAlbum.destroy({ where: { user_id: userId, album_id: { [Op.in]: toRemoveSaved } } });
           InteractionLog.bulkCreate(toRemoveSaved.map(albumId => ({
             user_id: userId,
             interaction_type: "unsave_album",
             target_type: "album",
             target_id: String(albumId)
-          })))
-        );
+          }))).catch(err => console.error(err));
+        }
+      } catch (err) {
+        console.error("[syncSavedAlbums Error]:", err);
       }
-      await Promise.all(ops);
     };
 
     // 5. Sync Notifications
     const syncNotifications = async () => {
-      const currentNotifs = await Notification.findAll({ where: { user_id: userId } });
-      const currentNotifIds = currentNotifs.map(n => n.id);
-      const incomingNotifIds = notifications.map(n => n.id);
+      try {
+        const currentNotifs = await Notification.findAll({ where: { user_id: userId } });
+        const currentNotifIds = currentNotifs.map(n => n.id);
+        const incomingNotifIds = notifications.map(n => String(n.id || '')).filter(Boolean);
 
-      const notifOps = [];
-      for (const notif of notifications) {
-        const data = {
-          id: notif.id,
-          user_id: userId,
-          type: notif.type,
-          target_id: notif.targetId,
-          title: notif.title,
-          message: notif.message,
-          timestamp: notif.timestamp || new Date().toISOString(),
-          read: notif.read || false,
-          cleared: notif.cleared || false
-        };
-        
-        if (currentNotifIds.includes(notif.id)) {
-          notifOps.push(Notification.update(data, { where: { id: notif.id } }));
-        } else {
-          notifOps.push(Notification.create(data));
+        for (const notif of notifications) {
+          const notifId = String(notif.id || `notif_${Date.now()}_${Math.random()}`);
+          const targetIdNum = parseInt(notif.targetId || notif.target_id, 10);
+          const data = {
+            id: notifId,
+            user_id: userId,
+            type: notif.type || 'general',
+            target_id: !isNaN(targetIdNum) ? targetIdNum : null,
+            title: notif.title || '',
+            message: notif.message || '',
+            timestamp: notif.timestamp || new Date().toISOString(),
+            read: !!notif.read,
+            cleared: !!notif.cleared
+          };
+          
+          if (currentNotifIds.includes(notifId)) {
+            await Notification.update(data, { where: { id: notifId } });
+          } else {
+            await Notification.create(data);
+          }
         }
-      }
 
-      const toRemoveNotifs = currentNotifIds.filter(id => !incomingNotifIds.includes(id));
-      if (toRemoveNotifs.length > 0) {
-        notifOps.push(Notification.destroy({ where: { id: toRemoveNotifs } }));
+        const toRemoveNotifs = currentNotifIds.filter(id => !incomingNotifIds.includes(id));
+        if (toRemoveNotifs.length > 0) {
+          await Notification.destroy({ where: { id: { [Op.in]: toRemoveNotifs } } });
+        }
+      } catch (err) {
+        console.error("[syncNotifications Error]:", err);
       }
-      await Promise.all(notifOps);
     };
 
     // 6. Sync Playlists
     const syncPlaylists = async () => {
-      const currentPlaylists = await Playlist.findAll({ where: { user_id: userId } });
-      const currentPlaylistIds = currentPlaylists.map(p => p.id);
-      const incomingPlaylistIds = playlists.map(p => p.id);
+      try {
+        const currentPlaylists = await Playlist.findAll({ where: { user_id: userId } });
+        const currentPlaylistIds = currentPlaylists.map(p => p.id);
+        const incomingPlaylistIds = playlists.map(p => String(p.id || '')).filter(Boolean);
 
-      for (const playlist of playlists) {
-        if (currentPlaylistIds.includes(playlist.id)) {
-          await Playlist.update({ name: playlist.name }, { where: { id: playlist.id } });
-        } else {
-          await Playlist.create({ id: playlist.id, name: playlist.name, user_id: userId });
-          InteractionLog.create({
-            user_id: userId,
-            interaction_type: "create_playlist",
-            target_type: "playlist",
-            target_id: String(playlist.id),
-            details: playlist.name
-          }).catch(err => console.error(err));
-        }
+        for (const playlist of playlists) {
+          const playlistId = String(playlist.id);
+          if (!playlistId) continue;
 
-        // Sync playlist songs
-        const oldPlaylistSongs = await PlaylistSong.findAll({ where: { playlist_id: playlist.id } });
-        const oldSongIds = oldPlaylistSongs.map(ps => ps.song_id);
-
-        await PlaylistSong.destroy({ where: { playlist_id: playlist.id } });
-        if (playlist.songs && playlist.songs.length > 0) {
-          const bulkSongs = playlist.songs.map((song, idx) => ({
-            playlist_id: playlist.id,
-            song_id: song.song_id,
-            order: idx
-          }));
-          await PlaylistSong.bulkCreate(bulkSongs);
-
-          const newlyAddedSongIds = playlist.songs.map(s => s.song_id).filter(id => !oldSongIds.includes(id));
-          if (newlyAddedSongIds.length > 0) {
-            InteractionLog.bulkCreate(newlyAddedSongIds.map(songId => ({
+          if (currentPlaylistIds.includes(playlistId)) {
+            await Playlist.update({ name: playlist.name }, { where: { id: playlistId } });
+          } else {
+            await Playlist.create({ id: playlistId, name: playlist.name, user_id: userId });
+            InteractionLog.create({
               user_id: userId,
-              interaction_type: "add_to_playlist",
-              target_type: "song",
-              target_id: String(songId),
-              details: String(playlist.id)
-            }))).catch(err => console.error(err));
+              interaction_type: "create_playlist",
+              target_type: "playlist",
+              target_id: playlistId,
+              details: playlist.name
+            }).catch(err => console.error(err));
+          }
+
+          // Sync playlist songs
+          const oldPlaylistSongs = await PlaylistSong.findAll({ where: { playlist_id: playlistId } });
+          const oldSongIds = oldPlaylistSongs.map(ps => ps.song_id);
+
+          await PlaylistSong.destroy({ where: { playlist_id: playlistId } });
+          if (playlist.songs && playlist.songs.length > 0) {
+            const bulkSongs = [];
+            playlist.songs.forEach((song, idx) => {
+              const songId = extractId(song, 'song_id', ['id']);
+              if (songId) {
+                bulkSongs.push({
+                  playlist_id: playlistId,
+                  song_id: songId,
+                  order: idx
+                });
+              }
+            });
+
+            if (bulkSongs.length > 0) {
+              await PlaylistSong.bulkCreate(bulkSongs, { ignoreDuplicates: true });
+
+              const newlyAddedSongIds = bulkSongs.map(s => s.song_id).filter(id => !oldSongIds.includes(id));
+              if (newlyAddedSongIds.length > 0) {
+                InteractionLog.bulkCreate(newlyAddedSongIds.map(songId => ({
+                  user_id: userId,
+                  interaction_type: "add_to_playlist",
+                  target_type: "song",
+                  target_id: String(songId),
+                  details: playlistId
+                }))).catch(err => console.error(err));
+              }
+            }
           }
         }
-      }
 
-      const toRemovePlaylists = currentPlaylistIds.filter(id => !incomingPlaylistIds.includes(id));
-      if (toRemovePlaylists.length > 0) {
-        await Playlist.destroy({ where: { id: toRemovePlaylists } });
+        const toRemovePlaylists = currentPlaylistIds.filter(id => !incomingPlaylistIds.includes(id));
+        if (toRemovePlaylists.length > 0) {
+          await Playlist.destroy({ where: { id: { [Op.in]: toRemovePlaylists } } });
+        }
+      } catch (err) {
+        console.error("[syncPlaylists Error]:", err);
       }
     };
 
@@ -387,7 +437,6 @@ exports.recordSongPlay = async (req, res) => {
     const { songId } = req.body;
     if (!songId) return res.status(400).json({ success: false, message: "songId is required" });
 
-    // Non-blocking interaction and history recording
     await Promise.all([
       ListeningHistory.create({
         user_id: userId,
@@ -437,7 +486,6 @@ exports.getRecentlyPlayed = async (req, res) => {
 
 exports.listDeletedPlaylists = async (req, res) => {
   try {
-    const { Op } = require('sequelize');
     const playlists = await Playlist.findAll({
       where: {
         user_id: req.user.id,
