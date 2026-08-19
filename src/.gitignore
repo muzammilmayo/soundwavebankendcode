@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Uploads & User State
+uploads/*
+!uploads/.gitkeep
+userState_*.json
+spotify.DB
+
+# Python Cache
+__pycache__/
+**/__pycache__/
+*.pyc

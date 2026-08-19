@@ -5,6 +5,7 @@ const {
   register,
   login,
   logout,
+  heartbeat,
   changePassword,
   forgotPassword,
   resetPassword,
@@ -82,6 +83,9 @@ router.put("/change-password", verifyToken, authLimiter, changePassword);
 
 // Logout
 router.post("/logout", verifyToken, logout);
+
+// Heartbeat (keeps user online)
+router.post("/heartbeat", verifyToken, heartbeat);
 
 // Delete Own Account
 router.delete("/account", verifyToken, userController.deleteAccount);

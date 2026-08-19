@@ -44,7 +44,19 @@ exports.uploadSong = async (req, res) => {
     };
     const song = await Song.create(songData);
 
+    // ── Queue lyrics generation (fire-and-forget, non-blocking) ──────────────
+    try {
+      const { lyricsQueue } = require('../queues/lyricsQueue');
+      const lyricsJob = await lyricsQueue.add('generate-lyrics', { songId: song.song_id });
+      await song.update({ lyrics_status: 'pending', lyrics_job_id: String(lyricsJob.id) });
+      console.log(`[artistController] Lyrics job queued: song=${song.song_id}, job=${lyricsJob.id}`);
+    } catch (queueErr) {
+      // Don't fail the upload if Redis/queue is unavailable — lyrics are optional
+      console.warn('[artistController] Could not queue lyrics job:', queueErr.message);
+    }
+
     // Notify all followers if published immediately
+
     if (status === 'published') {
       const followers = await ArtistFollower.findAll({
         where: { artist_profile_id: profile.artist_profile_id }
@@ -181,13 +193,26 @@ exports.getAlbums = async (req, res) => {
   }
 };
 
+const { Sequelize } = require('sequelize');
+
 exports.getSongs = async (req, res) => {
   try {
     const targetUserId = req.user.moderatedArtistUserId || req.user.id;
     const profile = await ArtistProfile.findOne({ where: { user_id: targetUserId } });
     if (!profile) return res.status(404).json({ success: false, message: 'Artist profile not found' });
+    
+    const likesCountCol = [
+      Sequelize.literal(`(
+        SELECT COUNT(*)
+        FROM song_likes AS likes
+        WHERE likes.song_id = Song.song_id
+      )`),
+      'likes_count'
+    ];
+
     const songs = await Song.findAll({
       where: { artist_profile_id: profile.artist_profile_id },
+      attributes: { include: [likesCountCol] },
       include: [
         {
           model: SongLike

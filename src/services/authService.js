@@ -43,6 +43,8 @@ const AuthService = {
       throw error;
     }
 
+    await UserModel.updateLastSeen(user.user_id);
+
     const token = jwt.sign(
       { id: user.user_id, role_id: user.role_id },
       process.env.JWT_SECRET,

@@ -110,6 +110,31 @@ const UserModel = {
   deleteById: async (userId) => {
     await User.destroy({ where: { user_id: userId } });
   },
+
+  setOnlineStatus: async (userId, isOnline) => {
+    await User.update({ is_online: isOnline }, { where: { user_id: userId } });
+  },
+
+  updateLastSeen: async (userId) => {
+    await User.update(
+      { is_online: true, last_seen_at: new Date() },
+      { where: { user_id: userId } }
+    );
+  },
+
+  markStaleUsersOffline: async (thresholdMinutes = 2) => {
+    const cutoff = new Date(Date.now() - thresholdMinutes * 60 * 1000);
+    const [affectedCount] = await User.update(
+      { is_online: false },
+      {
+        where: {
+          is_online: true,
+          last_seen_at: { [Op.lt]: cutoff },
+        },
+      }
+    );
+    return affectedCount;
+  },
 };
 
 module.exports = UserModel;
